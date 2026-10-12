@@ -128,6 +128,15 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   fonts under the CSP), five text sizes, label 4×6 or 4×4. Customer email
   prints only once Email is granted in protected customer data.
 - `/app/slip`: template row, settings column + sticky live preview.
+- **Store logo** (`brand-logo.server.ts`): `logoSource` store (default) /
+  custom link / none. The Admin API has no brand logo, so the app creates
+  its own Storefront token (`storefrontAccessTokenCreate`, needs the
+  `unauthenticated_read_content` scope; token encrypted in
+  `Shop.storefrontTokenEnc`) and reads `shop.brand.logo` — works on
+  password-protected stores, where tokenless Storefront calls fail
+  ("Online Store channel is locked"). Cached in `Shop.brandLogoUrl`;
+  refreshed on every Packing slip visit and at most daily when printing;
+  `resolveLogo` picks what prints. Failures keep the last known logo.
 - The Orders page can override the template for one print (`?tpl=`).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.

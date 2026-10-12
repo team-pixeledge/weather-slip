@@ -161,8 +161,12 @@ export const FONT_SIZES: { id: FontSizeKey; label: string; px: number }[] = [
  * JSON). Every value read from storage or a request goes through
  * sanitizeDesign, so the renderer can trust it.
  */
+export type LogoSource = "store" | "custom" | "none";
+
 export interface SlipDesign {
-  /** https://cdn.shopify.com/… only — the print page's CSP allows no other image host. */
+  /** store = Shopify → Settings → Brand logo; custom = logoUrl; none. */
+  logoSource: LogoSource;
+  /** Custom logo link. https://cdn.shopify.com/… only — the print page's CSP allows no other image host. */
   logoUrl: string | null;
   logoPosition: LogoPosition;
   logoSize: SizeKey;
@@ -195,6 +199,7 @@ export interface SlipDesign {
 }
 
 export const DEFAULT_SLIP_DESIGN: SlipDesign = {
+  logoSource: "store",
   logoUrl: null,
   logoPosition: "left",
   logoSize: "M",
@@ -241,8 +246,12 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     return t.trim() ? t : null;
   };
   const logo = typeof r.logoUrl === "string" ? r.logoUrl.trim() : "";
+  const logoUrl = logo && isShopifyCdnUrl(logo) ? logo : null;
   return {
-    logoUrl: logo && isShopifyCdnUrl(logo) ? logo : null,
+    // Saves from before logoSource existed: a custom link meant "custom".
+    logoSource:
+      r.logoSource === undefined && logoUrl ? "custom" : pick("logoSource", ["store", "custom", "none"] as const),
+    logoUrl,
     logoPosition: pick("logoPosition", ["left", "center", "right"] as const),
     logoSize: pick("logoSize", ["S", "M", "L"] as const),
     title: text("title"),
@@ -269,6 +278,16 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     fontSize: pick("fontSize", FONT_SIZES.map((f) => f.id)),
     labelSize: pick("labelSize", ["4x6", "4x4"] as const),
   };
+}
+
+/**
+ * The design as printed: the logo actually shown, from the chosen source.
+ * `brandLogoUrl` is the cached store logo (Shop.brandLogoUrl).
+ */
+export function resolveLogo(d: SlipDesign, brandLogoUrl: string | null): SlipDesign {
+  const url =
+    d.logoSource === "store" ? brandLogoUrl : d.logoSource === "custom" ? d.logoUrl : null;
+  return { ...d, logoUrl: url && isShopifyCdnUrl(url) ? url : null };
 }
 
 /** Merchant's slip settings (Shop row); the template is overridable per print. */

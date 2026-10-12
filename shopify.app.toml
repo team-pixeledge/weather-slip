@@ -30,7 +30,10 @@ automatically_update_urls_on_dev = false
 #   than 60 days. Shopify rejects a deploy with it until access is approved
 #   in the Partner Dashboard (API access requests → Read all orders). Once
 #   approved: add it here, deploy, then add it to Vercel's SCOPES env.
-scopes = "read_orders,write_orders"
+# unauthenticated_read_content: lets the app create its own Storefront
+#   token to read the store logo (Settings → Brand) for packing slips — the
+#   Admin API doesn't expose it. No customer data.
+scopes = "read_orders,write_orders,unauthenticated_read_content"
 
 [auth]
 redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]

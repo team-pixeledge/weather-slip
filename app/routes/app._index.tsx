@@ -422,7 +422,7 @@ export default function Orders() {
                         {WEATHER_LABEL[r.weather] ?? r.weather}
                       </s-badge>
                     ) : (
-                      <s-button variant="tertiary" onClick={() => openPrint("slips", [r.id])}>
+                      <s-button icon="print" onClick={() => openPrint("slips", [r.id])}>
                         Print slip
                       </s-button>
                     )}

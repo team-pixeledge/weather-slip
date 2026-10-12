@@ -6,6 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { localDate } from "../lib/dates";
+import { refreshBrandLogo } from "../lib/brand-logo.server";
 import { ensureShop, slipOptions } from "../lib/shop.server";
 import {
   FONT_SIZES,
@@ -13,12 +14,14 @@ import {
   FOOTER_MAX,
   isShopifyCdnUrl,
   PAPER_SIZES,
+  resolveLogo,
   isSlipTemplate,
   renderPackingSlips,
   sanitizeDesign,
   SLIP_TEMPLATES,
   TEXT_MAX,
   type FontKey,
+  type LogoSource,
   type PaperSize,
   type SlipDesign,
   type SlipOptions,
@@ -26,10 +29,13 @@ import {
 import { sampleSlipData } from "../lib/slip-sample";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
+  // Fresh on every visit, so a logo changed in Settings → Brand shows here.
+  const brandLogoUrl = await refreshBrandLogo(admin, shop);
   return {
     options: slipOptions(shop),
+    brandLogoUrl,
     unit: shop.unit,
     today: localDate(new Date(), shop.timezone),
     shopName: session.shop.replace(/\.myshopify\.com$/, ""),
@@ -79,7 +85,10 @@ export default function PackingSlip() {
 
   // The preview uses what will actually be saved (e.g. a non-Shopify logo
   // link is dropped), so it never shows something the print won't.
-  const previewOptions = useMemo(() => ({ ...o, design: sanitizeDesign(o.design) }), [o]);
+  const previewOptions = useMemo(
+    () => ({ ...o, design: resolveLogo(sanitizeDesign(o.design), loaded.brandLogoUrl) }),
+    [o, loaded.brandLogoUrl],
+  );
   const preview = useMemo(() => {
     const { shop, order, weather } = sampleSlipData(loaded.today, loaded.shopName);
     return renderPackingSlips(shop, [order], weather, {
@@ -95,7 +104,10 @@ export default function PackingSlip() {
   const isLabel = o.template === "LABEL_4X6";
   // Save stays faded until something differs from what's saved.
   const dirty = JSON.stringify(o) !== JSON.stringify(loaded.options);
-  const logoInvalid = !!d.logoUrl && !isShopifyCdnUrl(d.logoUrl.trim());
+  const logoInvalid =
+    d.logoSource === "custom" && !!d.logoUrl && !isShopifyCdnUrl(d.logoUrl.trim());
+  const hasLogo =
+    d.logoSource === "store" ? !!loaded.brandLogoUrl : d.logoSource === "custom" && !!d.logoUrl;
 
   const opt = (key: OptionKey, label: string, disabled = false) => (
     <s-checkbox
@@ -176,22 +188,53 @@ export default function PackingSlip() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <s-section heading="Logo & header">
               <s-stack direction="block" gap="base">
-                <s-text-field
-                  label="Logo link"
-                  placeholder="https://cdn.shopify.com/…"
-                  details="Upload your logo in Shopify admin → Content → Files, then copy its link here."
-                  value={d.logoUrl ?? ""}
-                  error={
-                    logoInvalid
-                      ? "Use a link from Shopify Files (starts with https://cdn.shopify.com/)."
-                      : undefined
-                  }
-                  onInput={(e) => setD({ logoUrl: e.currentTarget.value || null })}
-                />
+                <s-select
+                  label="Logo"
+                  value={d.logoSource}
+                  onChange={(e) => setD({ logoSource: e.currentTarget.value as LogoSource })}
+                >
+                  <s-option value="store">My Shopify store logo</s-option>
+                  <s-option value="custom">A different logo (link)</s-option>
+                  <s-option value="none">No logo</s-option>
+                </s-select>
+                {d.logoSource === "store" &&
+                  (loaded.brandLogoUrl ? (
+                    <s-stack direction="inline" gap="small-200" alignItems="center">
+                      <img
+                        src={loaded.brandLogoUrl}
+                        alt="Store logo"
+                        style={{ maxHeight: 32, maxWidth: 120, objectFit: "contain" }}
+                      />
+                      <s-text color="subdued">From Shopify → Settings → Brand</s-text>
+                    </s-stack>
+                  ) : (
+                    <s-text color="subdued">
+                      No logo found in Shopify. Add one in{" "}
+                      <s-link href="shopify://admin/settings/brand" target="_blank">
+                        Settings → Brand
+                      </s-link>{" "}
+                      and reopen this page. (If you just updated Weather Slip, approve its new
+                      permissions first.)
+                    </s-text>
+                  ))}
+                {d.logoSource === "custom" && (
+                  <s-text-field
+                    label="Logo link"
+                    placeholder="https://cdn.shopify.com/…"
+                    details="Upload the logo in Shopify admin → Content → Files, then copy its link here."
+                    value={d.logoUrl ?? ""}
+                    error={
+                      logoInvalid
+                        ? "Use a link from Shopify Files (starts with https://cdn.shopify.com/)."
+                        : undefined
+                    }
+                    onInput={(e) => setD({ logoUrl: e.currentTarget.value || null })}
+                  />
+                )}
                 <s-select
                   label="Logo position"
                   value={d.logoPosition}
-                  disabled={!d.logoUrl}
+                  disabled={!hasLogo}
                   onChange={(e) =>
                     setD({ logoPosition: e.currentTarget.value as SlipDesign["logoPosition"] })
                   }
@@ -203,7 +246,7 @@ export default function PackingSlip() {
                 <s-select
                   label="Logo size"
                   value={d.logoSize}
-                  disabled={!d.logoUrl}
+                  disabled={!hasLogo}
                   onChange={(e) => setD({ logoSize: e.currentTarget.value as SlipDesign["logoSize"] })}
                 >
                   <s-option value="S">Small</s-option>

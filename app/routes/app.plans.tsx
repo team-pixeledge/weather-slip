@@ -320,7 +320,10 @@ export default function Plans() {
               <div
                 key={p.id}
                 style={{
-                  height: "100%",
+                  // No height: 100% — the grid stretches cards to equal
+                  // height; a percentage here resolved short and the
+                  // buttons spilled under the comparison box.
+                  minWidth: 0,
                   display: "flex",
                   flexDirection: "column",
                   gap: 12,

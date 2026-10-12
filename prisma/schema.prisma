@@ -92,6 +92,12 @@ model Shop {
   slipFooter      String? // null = default thank-you line, "" = none
   slipDesign      Json? // logo, header/footer/weather toggles, colours — see SlipDesign in app/lib/slip.ts
 
+  // Store logo from Shopify Settings → Brand, read through the Storefront
+  // API with the app's own Storefront token (encrypted, like the API key).
+  storefrontTokenEnc String?
+  brandLogoUrl       String?
+  brandLogoCheckedAt DateTime?
+
   // Usage: orders that got a first snapshot in the current 30-day period.
   usagePeriodStart DateTime @default(now())
   usageCount       Int      @default(0)

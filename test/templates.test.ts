@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { planFeatures, planFromBillingName, PLANS } from "../app/lib/plans";
-import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, sanitizeDesign, type SlipOptions } from "../app/lib/slip";
+import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, resolveLogo, sanitizeDesign, type SlipOptions } from "../app/lib/slip";
 import { sampleSlipData } from "../app/lib/slip-sample";
 
 const { shop, order, weather } = sampleSlipData("2026-10-12", "Green Leaf Co");
@@ -125,5 +125,23 @@ describe("slip design", () => {
     expect(render({ paper: "A5" })).toContain("size: A5");
     expect(render({ paper: "LEGAL" })).toContain("size: legal");
     expect(withDesign({ labelSize: "4x4" }, { template: "LABEL_4X6" })).toContain("size: 4in 4in");
+  });
+});
+
+describe("logo source", () => {
+  const brand = "https://cdn.shopify.com/s/files/brand.png";
+  const custom = "https://cdn.shopify.com/s/files/custom.png";
+  it("uses the store logo by default, a custom link, or none", () => {
+    const d = sanitizeDesign({});
+    expect(d.logoSource).toBe("store");
+    expect(resolveLogo(d, brand).logoUrl).toBe(brand);
+    expect(resolveLogo(sanitizeDesign({ logoSource: "custom", logoUrl: custom }), brand).logoUrl).toBe(custom);
+    expect(resolveLogo(sanitizeDesign({ logoSource: "none", logoUrl: custom }), brand).logoUrl).toBeNull();
+  });
+  it("treats an older save with a custom link as custom", () => {
+    expect(sanitizeDesign({ logoUrl: custom }).logoSource).toBe("custom");
+  });
+  it("never prints a non-Shopify store logo", () => {
+    expect(resolveLogo(sanitizeDesign({}), "https://evil.example/x.png").logoUrl).toBeNull();
   });
 });

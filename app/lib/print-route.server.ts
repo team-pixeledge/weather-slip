@@ -6,7 +6,8 @@ import { MAX_PRINT_ORDERS } from "./order-views";
 import { ordersToPrint } from "./orders.server";
 import { verifyPrintToken } from "./print-token.server";
 import { drainQueue } from "./queue-runner.server";
-import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips } from "./slip";
+import { brandLogoIfFresh } from "./brand-logo.server";
+import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, resolveLogo } from "./slip";
 import { slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 
@@ -84,6 +85,8 @@ async function renderPrint(
     // one print.
     const slip = slipOptions(shop);
     if (isSlipTemplate(tpl)) slip.template = tpl;
+    const brandLogo = slip.design.logoSource === "store" ? await brandLogoIfFresh(admin, shop) : null;
+    slip.design = resolveLogo(slip.design, brandLogo);
     html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip });
   }
   return new Response(html, { headers: securityHeaders(nonce, opts.frameAncestors) });
