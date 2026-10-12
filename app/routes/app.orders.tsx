@@ -105,12 +105,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     rows: rows.map((r) => ({ ...r, weather: weather[r.id] ?? null })),
     pageInfo,
     printToken: signPrintToken(session.shop),
+    // Without read_all_orders Shopify only returns the last 60 days.
+    allOrdersAccess: (session.scope ?? "").split(",").includes("read_all_orders"),
     defaultTemplate: (await ensureShop(session.shop)).slipTemplate as SlipTemplate,
   };
 };
 
 export default function Orders() {
-  const { view, search, range, rows, pageInfo, printToken, defaultTemplate } =
+  const { view, search, range, rows, pageInfo, printToken, defaultTemplate, allOrdersAccess } =
     useLoaderData<typeof loader>();
   const [, setParams] = useSearchParams();
   const navigation = useNavigation();
@@ -182,6 +184,13 @@ export default function Orders() {
         Slip templates
       </s-button>
 
+      {!allOrdersAccess && (
+        <s-banner tone="info">
+          Showing orders from the last 60 days. Shopify shows apps older orders only once
+          &quot;Read all orders&quot; access is approved for Weather Slip.
+        </s-banner>
+      )}
+
       {tooMany && (
         <s-banner tone="warning">
           You can print up to {MAX_PRINT_ORDERS} orders at a time — {selected.size} are selected.
@@ -233,7 +242,13 @@ export default function Orders() {
               </s-button>
             </s-stack>
           ) : (
-            <s-stack slot="filters" direction="inline" gap="small-300" alignItems="center">
+            // One row like Shopify's: view picker, search filling the rest, date.
+            <s-grid
+              slot="filters"
+              gridTemplateColumns="@container (inline-size > 560px) 150px 1fr 170px, 1fr"
+              gap="small-300"
+              alignItems="center"
+            >
               <s-select
                 label="View"
                 labelAccessibilityVisibility="exclusive"
@@ -271,7 +286,7 @@ export default function Orders() {
                   </s-option>
                 ))}
               </s-select>
-            </s-stack>
+            </s-grid>
           )}
 
           <s-table-header-row>
@@ -365,7 +380,11 @@ export default function Orders() {
         {rows.length === 0 && !loading && (
           <s-box padding="base">
             <s-paragraph>
-              {search ? "No orders match your search." : "No orders to show here."}
+              {search
+                ? "No orders match your search."
+                : allOrdersAccess
+                  ? "No orders to show here."
+                  : "No orders in the last 60 days. Older orders appear once \"Read all orders\" access is approved."}
             </s-paragraph>
           </s-box>
         )}
