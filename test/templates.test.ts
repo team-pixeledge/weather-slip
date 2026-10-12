@@ -196,7 +196,7 @@ describe("logo size", () => {
   it("uses the chosen pixel height and width cap, clamped", () => {
     const d = sanitizeDesign({ logoSource: "custom", logoUrl: logo, logoHeight: 120, logoMaxWidth: 300 });
     const html = render({ design: d });
-    expect(html).toContain("max-height:120px;max-width:300px");
+    expect(html).toContain("--logo-h: 120px; --logo-w: 300px;");
     expect(sanitizeDesign({ logoHeight: 5000 }).logoHeight).toBe(200);
     expect(sanitizeDesign({ logoHeight: "abc" }).logoHeight).toBe(56);
   });
@@ -205,7 +205,7 @@ describe("logo size", () => {
   });
   it("halves it on shipping labels", () => {
     const d = sanitizeDesign({ logoSource: "custom", logoUrl: logo, logoHeight: 80 });
-    expect(render({ template: "LABEL_4X6", design: d })).toContain("max-height:40px");
+    expect(render({ template: "LABEL_4X6", design: d })).toContain("--logo-h: 40px;");
   });
 });
 
@@ -227,5 +227,19 @@ describe("theme logo lookup", () => {
     const json = JSON.stringify({ current: "Default", presets: { Default: { logo: "shopify://shop_images/p.png" } } });
     expect(findThemeLogoRef(json)).toBe("shopify://shop_images/p.png");
     expect(findThemeLogoRef("{}")).toBeNull();
+  });
+});
+
+describe("print-page CSP", () => {
+  it("never relies on inline style attributes (the print CSP drops them)", () => {
+    const d = sanitizeDesign({
+      logoSource: "custom",
+      logoUrl: "https://cdn.shopify.com/s/files/logo.png",
+      showPrices: true,
+      showTotals: true,
+    });
+    for (const template of ["CLASSIC", "MINIMAL", "DETAILED", "LABEL_4X6"] as const) {
+      expect(render({ template, design: d })).not.toMatch(/\sstyle="/);
+    }
   });
 });

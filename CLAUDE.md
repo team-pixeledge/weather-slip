@@ -131,6 +131,11 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   fonts under the CSP), five text sizes, label 4×6 or 4×4. Customer email
   prints only once Email is granted in protected customer data.
 - `/app/slip`: template row, settings column + sticky live preview.
+- **No `style=""` attributes in slip HTML.** The print page's CSP only
+  allows its nonce'd `<style>`, so inline styles are silently dropped in
+  real prints — while the in-app preview (srcdoc, no CSP) still shows
+  them. Sizes go through CSS variables in `designVars` (--logo-h,
+  --logo-w, --img…). A test fails if any template emits `style="`.
 - **Line items** (design fields): image size, title shortening (30/50/80),
   variant line, SKU, vendor, barcode, item properties (keys starting "_"
   hidden, as at checkout), prices + struck "was" price (compare-at or

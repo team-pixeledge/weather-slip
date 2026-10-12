@@ -760,12 +760,11 @@ function itemsHtml(order: PrintOrder, o: SlipOptions, prices: boolean): string {
   const d = o.design;
   const money = moneyFmt(order.currencyCode);
   const images = o.showImages && o.template !== "MINIMAL";
-  const px = ITEM_IMG_PX[d.itemImageSize];
   const rows = itemsToShip(order, d)
     .map(({ li, qty }) => {
       const img = li.image
-        ? `<img src="${escapeHtml(li.image.url)}" alt="${escapeHtml(li.image.altText ?? "")}" style="width:${px}px;height:${px}px">`
-        : `<span class="noimg" style="width:${px}px">No image</span>`;
+        ? `<img src="${escapeHtml(li.image.url)}" alt="${escapeHtml(li.image.altText ?? "")}">`
+        : `<span class="noimg">No image</span>`;
       const { title, details } = itemText(li, d, o.showSku);
       const original = Number(li.originalUnitPriceSet?.shopMoney.amount ?? NaN);
       const now = Number(
@@ -784,7 +783,7 @@ function itemsHtml(order: PrintOrder, o: SlipOptions, prices: boolean): string {
         : "";
       return `
         <tr>
-          ${images ? `<td class="img" style="width:${px + 8}px">${img}</td>` : ""}
+          ${images ? `<td class="img">${img}</td>` : ""}
           <td>
             <div class="iname">${escapeHtml(title)}</div>
             ${details.map((t) => `<div class="muted">${escapeHtml(t)}</div>`).join("")}
@@ -877,13 +876,13 @@ function shopFooter(shop: PrintShop, o: SlipOptions): string {
   return body.trim() ? `<footer>${body}</footer>` : "";
 }
 
-function logoHtml(
-  d: SlipDesign,
-  px = d.logoHeight,
-  maxW = d.logoMaxWidth,
-): string {
+// Sizes come from CSS variables (designVars), never style="" attributes:
+// the print page's CSP only allows its nonce'd stylesheet, so inline
+// styles are silently dropped there (the preview isn't under that CSP,
+// which is how a full-size logo got past it).
+function logoHtml(d: SlipDesign): string {
   return d.logoUrl
-    ? `<img class="logo" src="${escapeHtml(d.logoUrl)}" alt="" style="max-height:${px}px;max-width:${maxW}px">`
+    ? `<img class="logo" src="${escapeHtml(d.logoUrl)}" alt="">`
     : "";
 }
 
@@ -991,12 +990,8 @@ function labelPage(order: PrintOrder, c: PageCtx): string {
     })
     .join("");
   const d = c.o.design;
-  // A 4-inch label has less room: half the chosen size, 16–60 px.
-  const logo = logoHtml(
-    d,
-    Math.min(60, Math.max(16, Math.round(d.logoHeight / 2))),
-    Math.min(200, d.logoMaxWidth),
-  );
+  // Label logo size comes from designVars (half the chosen height).
+  const logo = logoHtml(d);
   return `
     <article class="page">
       <header>
@@ -1030,7 +1025,8 @@ const BASE_STYLES = `
   header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   header h1 { font-size: 1.85em; color: var(--accent, #111); }
   header .brand { display: flex; align-items: center; gap: 12px; }
-  .logo { display: block; object-fit: contain; }
+  .logo { display: block; object-fit: contain; height: auto; width: auto;
+          max-height: var(--logo-h, 56px); max-width: var(--logo-w, 220px); }
   header .meta .logo { margin: 0 0 6px auto; }
   .logo-center { display: flex; justify-content: center; margin-bottom: 10px; }
   .headnote { border-left: 4px solid var(--accent, #111); background: #f6f6f6; padding: 8px 10px; margin: 0 0 12px; font-weight: 600; }
@@ -1067,11 +1063,11 @@ const BASE_STYLES = `
   table.items th { text-align: left; font-size: 11px; border-bottom: 1px solid #bbb; padding: 4px 6px; }
   table.items td { border-bottom: 1px solid #eee; padding: 6px; vertical-align: middle; }
   table.items .num { text-align: right; }
-  td.img { width: 56px; }
-  td.img img { object-fit: contain; display: block; }
+  td.img { width: calc(var(--img, 48px) + 8px); }
+  td.img img { object-fit: contain; display: block; width: var(--img, 48px); height: var(--img, 48px); }
   .iname { font-weight: 500; }
   s.was { color: #888; }
-  .noimg { display: inline-block; width: 48px; font-size: 9px; color: #999; text-align: center; }
+  .noimg { display: inline-block; width: var(--img, 48px); font-size: 9px; color: #999; text-align: center; }
   table.items .qty { text-align: right; white-space: nowrap; }
   table.totals { margin: 8px 0 0 auto; border-collapse: collapse; min-width: 220px; }
   table.totals td { padding: 3px 6px; }
@@ -1133,7 +1129,11 @@ function pageRule(o: SlipOptions): string {
 function designVars(d: SlipDesign, label: boolean): string {
   const base = FONT_SIZES.find((f) => f.id === d.fontSize)?.px ?? 12;
   const px = label ? base - 2 : base;
-  return `:root { --accent: ${d.accent}; --font: ${FONTS[d.font].css}; --fs: ${px}px; }`;
+  // A 4-inch label has less room: half the chosen logo size, 16–48 px.
+  const logoH = label ? Math.min(48, Math.max(16, Math.round(d.logoHeight / 2))) : d.logoHeight;
+  const logoW = label ? Math.min(160, d.logoMaxWidth) : d.logoMaxWidth;
+  const img = ITEM_IMG_PX[d.itemImageSize];
+  return `:root { --accent: ${d.accent}; --font: ${FONTS[d.font].css}; --fs: ${px}px; --logo-h: ${logoH}px; --logo-w: ${logoW}px; --img: ${img}px; }`;
 }
 
 function stylesFor(o: SlipOptions | null): string {
