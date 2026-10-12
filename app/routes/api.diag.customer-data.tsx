@@ -1,10 +1,11 @@
-import { timingSafeEqual } from "node:crypto";
 import type { LoaderFunctionArgs } from "react-router";
 import { unauthenticated } from "../shopify.server";
+import { verifyPrintToken } from "../lib/print-token.server";
 
 // Operator diagnostic: is Shopify sharing protected customer fields with
 // the app for this shop? Reports only whether each field came back —
-// never the values. Guarded by CRON_SECRET like /api/cron/drain.
+// never the values. Authorised by a signed print token (?t=, same as the
+// print pages): the shop comes from the token.
 const PROBE = `#graphql
   query WeatherSlipProtectedDataProbe {
     orders(first: 5, sortKey: CREATED_AT, reverse: true) {
@@ -18,20 +19,11 @@ const PROBE = `#graphql
     }
   }`;
 
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const got = Buffer.from(request.headers.get("authorization") ?? "");
-  const want = Buffer.from(`Bearer ${secret}`);
-  return got.length === want.length && timingSafeEqual(got, want);
-}
-
 const present = (v: unknown) => (v == null || v === "" ? "empty" : "yes");
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
-  const shop = new URL(request.url).searchParams.get("shop") ?? "";
-  if (!/^[a-z0-9-]+\.myshopify\.com$/.test(shop)) return new Response("Bad shop", { status: 400 });
+  const shop = verifyPrintToken(new URL(request.url).searchParams.get("t"));
+  if (!shop) return new Response("Unauthorized", { status: 401 });
 
   const { admin } = await unauthenticated.admin(shop);
   let data: { orders?: { nodes: Record<string, unknown>[] } } | undefined;
