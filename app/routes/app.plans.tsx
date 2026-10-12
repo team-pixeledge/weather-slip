@@ -16,7 +16,6 @@ import {
   syncPlan,
 } from "../lib/billing.server";
 import {
-  comparisonRows,
   PAID_PLANS,
   PLAN_ORDER,
   PLANS,
@@ -68,7 +67,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ...PLANS[id],
       features: planFeatures(id),
     })),
-    comparison: comparisonRows(),
   };
 };
 
@@ -140,7 +138,6 @@ export default function Plans() {
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
   const [confirmFree, setConfirmFree] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
   const pending =
     fetcher.state !== "idle" ? String(fetcher.formData?.get("plan")) : null;
   const current = PLANS[d.current];
@@ -371,29 +368,52 @@ export default function Plans() {
                 <s-text color="subdued">{p.tagline}</s-text>
                 <div style={{ borderTop: "1px solid #ebebeb" }} />
                 <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  style={{ display: "flex", flexDirection: "column", gap: 5 }}
                 >
-                  {p.features.map((f) =>
-                    /^Everything in /i.test(f) ? (
-                      <div key={f} style={{ marginTop: 4 }}>
-                        <s-text color="subdued">{f}</s-text>
-                      </div>
-                    ) : (
-                      <div
-                        key={f}
+                  {p.features.map((f) => (
+                    <div
+                      key={f.text}
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "flex-start",
+                        fontSize: 12.5,
+                        lineHeight: 1.35,
+                        opacity: f.included ? 1 : 0.45,
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
                         style={{
-                          display: "flex",
-                          gap: 6,
-                          alignItems: "flex-start",
+                          color: f.included ? "#29845a" : "#8a8a8a",
+                          fontWeight: 700,
+                          width: 12,
+                          flex: "none",
                         }}
                       >
-                        <span style={{ color: "#29845a", fontWeight: 700 }}>
-                          ✓
-                        </span>
-                        <s-text>{f}</s-text>
-                      </div>
-                    ),
-                  )}
+                        {f.included ? "✓" : "✕"}
+                      </span>
+                      <span>
+                        {f.text}
+                        {!f.included && (
+                          // Screen-reader only: the faded ✕ is visual.
+                          <span
+                            style={{
+                              position: "absolute",
+                              width: 1,
+                              height: 1,
+                              overflow: "hidden",
+                              clip: "rect(0 0 0 0)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {" "}
+                            (not included)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
                 </div>
                 <div style={{ flex: 1 }} />
                 {confirming && (
@@ -432,94 +452,6 @@ export default function Plans() {
               </div>
             );
           })}
-        </div>
-
-        {/* ---- full comparison ---- */}
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 12,
-            border: "1px solid #e3e3e3",
-            boxShadow: "0 1px 3px rgba(0,0,0,.08)",
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span style={{ fontSize: 15, fontWeight: 650 }}>
-              Compare all features
-            </span>
-            <s-button
-              variant="tertiary"
-              onClick={() => setShowCompare((v) => !v)}
-            >
-              {showCompare ? "Hide" : "Show"}
-            </s-button>
-          </div>
-          {showCompare && (
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                marginTop: 12,
-                fontSize: 13,
-              }}
-            >
-              <thead>
-                <tr>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      padding: "8px 6px",
-                      borderBottom: "1px solid #e3e3e3",
-                    }}
-                  />
-                  {d.plans.map((p) => (
-                    <th
-                      key={p.id}
-                      style={{
-                        textAlign: "left",
-                        padding: "8px 6px",
-                        borderBottom: "1px solid #e3e3e3",
-                      }}
-                    >
-                      {p.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {d.comparison.map(([label, ...cells]) => (
-                  <tr key={label}>
-                    <td
-                      style={{
-                        padding: "8px 6px",
-                        borderBottom: "1px solid #f1f1f1",
-                      }}
-                    >
-                      {label}
-                    </td>
-                    {cells.map((c, i) => (
-                      <td
-                        key={i}
-                        style={{
-                          padding: "8px 6px",
-                          borderBottom: "1px solid #f1f1f1",
-                        }}
-                      >
-                        {c}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
       </div>
     </s-page>

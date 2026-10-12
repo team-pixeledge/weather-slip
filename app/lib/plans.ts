@@ -59,45 +59,22 @@ export function planFromBillingName(name: string): PlanId | null {
 }
 
 /**
- * Each plan card's list, App Store style: the plan's own limits first, then
- * "Everything in <lower plan>, plus:" and what it adds. A line starting
- * "Everything in" renders as a subheading, not a ✓ item.
+ * Every feature, for every plan card: included ones get a ✓, the rest are
+ * shown faded so the cards compare side by side (no separate table).
  */
-export function planFeatures(id: PlanId): string[] {
-  const orders = `${PLANS[id].ordersPerPeriod.toLocaleString("en-US")} orders a month printed with weather`;
-  if (id === "FREE") {
-    return [
-      orders,
-      "Print one slip or many",
-      "All 4 slip templates",
-      "Forecast for every day to delivery",
-      "Reprints always free",
-    ];
-  }
-  if (id === "STARTER") {
-    return [
-      orders,
-      "Everything in Free, plus:",
-      "Dispatch-day forecast in saved weather",
-      "Weather on Shopify's packing slip, Order Printer and emails",
-    ];
-  }
-  return [orders, "Everything in Starter, plus:", "Use your own OpenWeather API key"];
-}
-
-/** Rows for the "Compare all features" table: label, then one cell per plan. */
-export function comparisonRows(): [string, ...string[]][] {
-  const yes = (b: boolean) => (b ? "✓" : "—");
-  const each = (f: (p: PlanLimits) => string) => PLAN_ORDER.map((id) => f(PLANS[id]));
+export function planFeatures(id: PlanId): { text: string; included: boolean }[] {
+  const p = PLANS[id];
   return [
-    ["Orders printed with weather / month", ...each((p) => p.ordersPerPeriod.toLocaleString("en-US"))],
-    ["Reprints", ...each(() => "Free")],
-    ["Bulk packing slips + customer list", ...each(() => "✓")],
-    ["Slip templates (Classic, Minimal, Detailed, Shipping label)", ...each(() => "✓")],
-    ["Forecast for every day to delivery", ...each(() => "✓")],
-    ["Dispatch-day forecast in saved weather", ...each((p) => yes(p.dispatchForecast))],
-    ["Weather on Shopify's slip, Order Printer, emails", ...each((p) => (p.allTemplates ? "✓" : "Packing slip only"))],
-    ["Your own OpenWeather API key", ...each((p) => yes(p.ownApiKey))],
+    { text: `${p.ordersPerPeriod.toLocaleString("en-US")} orders/month printed with weather`, included: true },
+    { text: "Reprints always free", included: true },
+    { text: "Print one slip or many + customer list", included: true },
+    { text: "Print from Shopify's own Orders page", included: true },
+    { text: "4 templates, fully customisable", included: true },
+    { text: "Store logo, fonts, colours, paper sizes", included: true },
+    { text: "Forecast for every day to delivery", included: true },
+    { text: "Dispatch-day forecast in saved weather", included: p.dispatchForecast },
+    { text: "Weather on Shopify slip, Order Printer & emails", included: p.allTemplates },
+    { text: "Use your own OpenWeather API key", included: p.ownApiKey },
   ];
 }
 

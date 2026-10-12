@@ -55,6 +55,14 @@ describe("slip templates", () => {
 });
 
 describe("plans", () => {
+  it("lists every feature on every card, marking what's included", () => {
+    const free = planFeatures("FREE");
+    const pro = planFeatures("PRO");
+    expect(free.length).toBe(pro.length);
+    expect(free.find((f) => f.text.includes("own OpenWeather"))!.included).toBe(false);
+    expect(pro.every((f) => f.included)).toBe(true);
+  });
+
   it("maps Billing API names back to plans", () => {
     expect(planFromBillingName("Starter")).toBe("STARTER");
     expect(planFromBillingName("Pro")).toBe("PRO");
@@ -64,7 +72,7 @@ describe("plans", () => {
 
   it("each card lists its own order allowance", () => {
     for (const id of ["FREE", "STARTER", "PRO"] as const) {
-      expect(planFeatures(id).join(" ")).toContain(PLANS[id].ordersPerPeriod.toLocaleString("en-US"));
+      expect(planFeatures(id)[0]!.text).toContain(PLANS[id].ordersPerPeriod.toLocaleString("en-US"));
     }
   });
 });
