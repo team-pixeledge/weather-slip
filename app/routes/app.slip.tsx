@@ -267,10 +267,23 @@ export default function PackingSlip() {
                     </s-text>
                   ))}
                 {d.logoSource === "custom" && (
+                  <s-text color="subdued">
+                    1. Open{" "}
+                    <s-link
+                      href="shopify://admin/content/files"
+                      target="_blank"
+                    >
+                      Content → Files
+                    </s-link>{" "}
+                    and upload your logo (PNG or JPG). 2. Click the link icon on
+                    the file (&quot;Copy link&quot;). 3. Paste it below.
+                  </s-text>
+                )}
+                {d.logoSource === "custom" && (
                   <s-text-field
                     label="Logo link"
                     placeholder="https://cdn.shopify.com/…"
-                    details="Upload the logo in Shopify admin → Content → Files, then copy its link here."
+                    details="Must be a Shopify Files link (starts with https://cdn.shopify.com/)."
                     value={d.logoUrl ?? ""}
                     error={
                       logoInvalid

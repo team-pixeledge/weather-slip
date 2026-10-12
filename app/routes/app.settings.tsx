@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
+import type {
+  ActionFunctionArgs,
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -39,13 +43,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-const clampDays = (v: unknown) => Math.min(30, Math.max(0, Math.trunc(Number(v) || 0)));
+const clampDays = (v: unknown) =>
+  Math.min(30, Math.max(0, Math.trunc(Number(v) || 0)));
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
   const body = (await request.json()) as Record<string, unknown>;
-  const unit: Unit = body.unit === "F" || body.unit === "BOTH" ? body.unit : "C";
+  const unit: Unit =
+    body.unit === "F" || body.unit === "BOTH" ? body.unit : "C";
 
   // Whitelisted fields only — never pass the body to Prisma.
   const data: Record<string, unknown> = {
@@ -75,9 +81,31 @@ const SAMPLE = {
   provider: "openweather",
   fetchedAt: `${today}T09:00:00Z`,
   location: { city: "Austin", countryCode: "US", lat: 30.3, lon: -97.7 },
-  current: { tempC: 27.4, tempF: 81, code: 1, label: "Mostly clear", observedAt: `${today}T09:00` },
-  dispatch: { date: addDays(today, 1), status: "ok" as const, minC: 19, maxC: 29, precipProb: 10, code: 2, label: "Partly cloudy" },
-  delivery: { date: addDays(today, 4), status: "ok" as const, minC: 17, maxC: 24, precipProb: 60, code: 63, label: "Rain" },
+  current: {
+    tempC: 27.4,
+    tempF: 81,
+    code: 1,
+    label: "Mostly clear",
+    observedAt: `${today}T09:00`,
+  },
+  dispatch: {
+    date: addDays(today, 1),
+    status: "ok" as const,
+    minC: 19,
+    maxC: 29,
+    precipProb: 10,
+    code: 2,
+    label: "Partly cloudy",
+  },
+  delivery: {
+    date: addDays(today, 4),
+    status: "ok" as const,
+    minC: 17,
+    maxC: 24,
+    precipProb: 60,
+    code: 63,
+    label: "Rain",
+  },
 };
 
 export default function Settings() {
@@ -91,9 +119,17 @@ export default function Settings() {
     if (fetcher.data?.ok) shopify.toast.show("Settings saved");
   }, [fetcher.data, shopify]);
 
-  const display: DisplaySettings = { ...s, showDispatch: s.showDispatch && loaded.plan.dispatchForecast };
+  const display: DisplaySettings = {
+    ...s,
+    showDispatch: s.showDispatch && loaded.plan.dispatchForecast,
+  };
   const preview = formatSummary(
-    loaded.plan.dispatchForecast ? SAMPLE : { ...SAMPLE, dispatch: { date: SAMPLE.dispatch.date, status: "hidden" } },
+    loaded.plan.dispatchForecast
+      ? SAMPLE
+      : {
+          ...SAMPLE,
+          dispatch: { date: SAMPLE.dispatch.date, status: "hidden" },
+        },
     display,
   );
 
@@ -110,7 +146,9 @@ export default function Settings() {
   // loader re-runs after a save, so it fades again once stored).
   const dirty =
     apiKey !== "" ||
-    (Object.keys(s) as (keyof typeof s)[]).some((k) => s[k] !== loaded.settings[k]);
+    (Object.keys(s) as (keyof typeof s)[]).some(
+      (k) => s[k] !== loaded.settings[k],
+    );
 
   const save = () =>
     fetcher.submit(
@@ -130,7 +168,12 @@ export default function Settings() {
       </s-button>
 
       <s-section heading="Preview">
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <s-box
+          padding="base"
+          borderWidth="base"
+          borderRadius="base"
+          background="subdued"
+        >
           <s-text>{preview || "Nothing selected to show."}</s-text>
         </s-box>
         <s-paragraph>
@@ -153,7 +196,9 @@ export default function Settings() {
         {toggle("showCurrent", "Current temperature")}
         {toggle(
           "showDispatch",
-          loaded.plan.dispatchForecast ? "Dispatch-day forecast" : "Dispatch-day forecast (Starter and Pro)",
+          loaded.plan.dispatchForecast
+            ? "Dispatch-day forecast"
+            : "Dispatch-day forecast (Starter and Pro)",
           !loaded.plan.dispatchForecast,
         )}
         {toggle("showDelivery", "Delivery-day forecast")}
@@ -166,14 +211,18 @@ export default function Settings() {
           value={String(s.handlingDays)}
           min={0}
           max={30}
-          onChange={(e) => setS({ ...s, handlingDays: Number(e.currentTarget.value) })}
+          onChange={(e) =>
+            setS({ ...s, handlingDays: Number(e.currentTarget.value) })
+          }
         />
         <s-number-field
           label="Transit time (days from dispatch to delivery)"
           value={String(s.transitDays)}
           min={0}
           max={30}
-          onChange={(e) => setS({ ...s, transitDays: Number(e.currentTarget.value) })}
+          onChange={(e) =>
+            setS({ ...s, transitDays: Number(e.currentTarget.value) })
+          }
         />
         {toggle("skipWeekends", "Count weekdays only")}
         <s-paragraph>
@@ -184,14 +233,63 @@ export default function Settings() {
 
       <s-section heading="Weather API">
         {loaded.plan.ownApiKey ? (
-          <s-text-field
-            label="Your OpenWeather API key (optional)"
-            details={loaded.savedKey ? `Saved: ${loaded.savedKey}. Leave blank to keep it.` : "Uses the app's own key if empty."}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.currentTarget.value)}
-          />
+          <s-stack direction="block" gap="base">
+            <s-text-field
+              label="Your OpenWeather API key (optional)"
+              details={
+                loaded.savedKey
+                  ? `Saved: ${loaded.savedKey}. Leave blank to keep it.`
+                  : "Uses the app's own key if empty."
+              }
+              value={apiKey}
+              onChange={(e) => setApiKey(e.currentTarget.value)}
+            />
+            <s-box
+              padding="base"
+              borderWidth="base"
+              borderRadius="base"
+              background="subdued"
+            >
+              <s-stack direction="block" gap="small-200">
+                <s-text type="strong">How to get your key (free)</s-text>
+                <s-ordered-list>
+                  <s-list-item>
+                    Create a free account at{" "}
+                    <s-link
+                      href="https://home.openweathermap.org/users/sign_up"
+                      target="_blank"
+                    >
+                      openweathermap.org/users/sign_up
+                    </s-link>{" "}
+                    and confirm your email.
+                  </s-list-item>
+                  <s-list-item>
+                    Open{" "}
+                    <s-link
+                      href="https://home.openweathermap.org/api_keys"
+                      target="_blank"
+                    >
+                      My API keys
+                    </s-link>{" "}
+                    (your name → My API keys).
+                  </s-list-item>
+                  <s-list-item>
+                    Copy the key under “Key” (or create one named “Weather
+                    Slip”).
+                  </s-list-item>
+                  <s-list-item>Paste it above and click Save.</s-list-item>
+                </s-ordered-list>
+                <s-text color="subdued">
+                  A new key can take up to 2 hours to start working; until then
+                  the app&apos;s own key is used, so nothing breaks.
+                </s-text>
+              </s-stack>
+            </s-box>
+          </s-stack>
         ) : (
-          <s-paragraph>Weather is included in your plan. Pro can use its own API key.</s-paragraph>
+          <s-paragraph>
+            Weather is included in your plan. Pro can use its own API key.
+          </s-paragraph>
         )}
       </s-section>
     </s-page>
