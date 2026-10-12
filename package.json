@@ -20,7 +20,8 @@
     "typecheck": "react-router typegen && tsc --noEmit",
     "postinstall": "prisma generate",
     "test": "vitest run",
-    "worker": "tsx scripts/worker.ts"
+    "worker": "tsx scripts/worker.ts",
+    "vercel-build": "prisma generate && prisma migrate deploy && react-router build"
   },
   "type": "module",
   "engines": {
