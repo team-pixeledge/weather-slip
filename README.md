@@ -25,13 +25,16 @@ Running against a store needs the Partner Dashboard app first:
 
 ## Deploy (Vercel)
 
-1. Import the repo in Vercel (Pro plan — see CLAUDE.md for why).
-2. Create a Neon database; set `DATABASE_URL` (pooled) and `DIRECT_URL`.
+1. Vercel team "Test" (Hobby for now — see CLAUDE.md), project connected to
+   this repo.
+2. Neon from the Vercel Marketplace (sets `DATABASE_URL` and
+   `DATABASE_URL_UNPOOLED`).
 3. Set `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`, `SCOPES`,
    `OPENWEATHER_API_KEYS`, `ENCRYPTION_KEY`, `CRON_SECRET`.
 4. Put the Vercel URL in `shopify.app.toml` and run `npm run deploy`.
 
-Migrations run on every Vercel build (`vercel.json`).
+Migrations run on every Vercel build (`vercel.json`). Add GitHub repo
+secrets `APP_URL` and `CRON_SECRET` for the 10-minute queue workflow.
 
 ## Commands
 

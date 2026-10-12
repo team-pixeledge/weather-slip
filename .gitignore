@@ -32,3 +32,5 @@ pnpm-lock.yaml
 
 # Vercel build output
 .vercel
+.env*
+!.env.example

@@ -72,18 +72,26 @@ the provider. `WEATHER_PROVIDER` picks one:
   - webhooks enqueue, return 200, then `runInBackground(drainQueue())`
     (`background.server.ts` — Vercel `waitUntil`; the one file to change
     off Vercel);
-  - Vercel Cron → `/api/cron/drain` every 10 min (`vercel.json`), guarded
-    by `Authorization: Bearer $CRON_SECRET` — retries, pending fills,
-    pruning.
-- **Vercel Hobby can't run this commercially**: its terms are
-  non-commercial and its crons are once-a-day only (the `*/10` schedule
-  fails to deploy on Hobby). A listed paid app needs Vercel Pro.
+  - `/api/cron/drain`, guarded by `Authorization: Bearer $CRON_SECRET` —
+    retries, pending fills, pruning. Called every 10 min by GitHub Actions
+    (`.github/workflows/drain-queue.yml`, repo secrets `APP_URL` +
+    `CRON_SECRET`) and daily by Vercel Cron as a backstop (`vercel.json`).
+- **Vercel team "Test" (`test11-fc37`, account teampixeledge-1075) is on
+  Hobby** (user decision 2026-10-12, budget). Hobby crons run at most daily,
+  hence the GitHub Actions scheduler. Hobby's terms are non-commercial:
+  upgrade to Pro before charging merchants, then set `vercel.json` back to
+  `*/10` and delete the workflow. GitHub disables scheduled workflows after
+  60 days without commits.
+- Vercel CLI for this account uses its own config dir:
+  `vercel --global-config ~/.vercel-teampixeledge …` (the default CLI login
+  on this machine is a different account).
 - `react-router.config.ts` applies `vercelPreset()` only when `VERCEL` is
   set, so the same repo still builds as a plain Node server (Dockerfile).
   AWS move: run the Docker image (App Runner/ECS) + `npm run worker`
   (`scripts/worker.ts`) or a scheduled Lambda calling `drainQueue`, and
   swap `runInBackground` — no queue/data changes needed.
-- DB: Neon. `DATABASE_URL` = pooled host, `DIRECT_URL` = direct (migrate).
+- DB: Neon via the Vercel Marketplace. `DATABASE_URL` = pooled host,
+  `DATABASE_URL_UNPOOLED` = direct (migrate) — names the integration sets.
   `vercel.json` buildCommand runs `prisma migrate deploy` on every build.
 
 ## Not built yet / open

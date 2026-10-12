@@ -4,10 +4,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // Neon: DATABASE_URL = pooled (-pooler host) for the serverless runtime,
-  // DIRECT_URL = direct host for `prisma migrate`.
+  // Neon (Vercel Marketplace integration sets both): DATABASE_URL = pooled
+  // host for the serverless runtime, DATABASE_URL_UNPOOLED = direct host for
+  // `prisma migrate`.
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // Managed by @shopify/shopify-app-session-storage-prisma — keep its shape.
