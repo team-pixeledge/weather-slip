@@ -62,7 +62,9 @@ describe("plans", () => {
     expect(planFromBillingName("Something else")).toBeNull();
   });
 
-  it("lists each plan's order allowance first", () => {
-    expect(planFeatures("STARTER")[0]).toContain(PLANS.STARTER.ordersPerPeriod.toLocaleString("en-US"));
+  it("each card lists its own order allowance", () => {
+    for (const id of ["FREE", "STARTER", "PRO"] as const) {
+      expect(planFeatures(id).join(" ")).toContain(PLANS[id].ordersPerPeriod.toLocaleString("en-US"));
+    }
   });
 });

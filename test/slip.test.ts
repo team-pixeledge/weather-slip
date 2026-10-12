@@ -40,6 +40,19 @@ describe("orderSearchQuery", () => {
   });
 });
 
+describe("orderSearchQuery: views and date range", () => {
+  const now = new Date("2026-10-12T09:00:00Z");
+  it("All orders has no status filter", () => {
+    expect(orderSearchQuery("all", "", "any", now)).toBe("");
+    expect(orderSearchQuery("all", "#1001", "any", now)).toBe("(#1001)");
+  });
+  it("adds a created_at bound for a range", () => {
+    expect(orderSearchQuery("fulfilled", "", "180", now)).toBe(
+      "fulfillment_status:fulfilled AND created_at:>=2026-04-15",
+    );
+  });
+});
+
 describe("print token", () => {
   process.env.SHOPIFY_API_SECRET = "test-secret";
 

@@ -1,113 +1,162 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
-import { billingIsTest, syncPlan } from "../lib/billing.server";
 import {
-  billingName,
+  cancelSubscription,
+  chargeStatus,
+  createSubscription,
+  syncPlan,
+} from "../lib/billing.server";
+import {
+  comparisonRows,
   PAID_PLANS,
   PLAN_ORDER,
   PLANS,
   planFeatures,
+  planFromBillingName,
   USAGE_PERIOD_DAYS,
   type PlanId,
 } from "../lib/plans";
 import { ensureShop } from "../lib/shop.server";
 
+// Plans & pricing — also the app's usage overview (the old Overview page was
+// merged in here). Layout follows store-performance-monitor's select-plan.
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
-  // Re-read from Shopify on every visit: this is where a merchant lands
-  // after approving or declining a charge.
-  const { plan, subscription } = await syncPlan(admin, session.shop);
+  const url = new URL(request.url);
+
+  // Shopify sends the merchant back here with ?charge_id= after the
+  // approval screen. Read that charge's real status before syncing.
+  const chargeId = url.searchParams.get("charge_id");
+  const returned = chargeId ? await chargeStatus(admin, chargeId) : null;
+  const billing = await syncPlan(admin, session.shop);
 
   const now = Date.now();
   const periodMs = USAGE_PERIOD_DAYS * 86_400_000;
   const elapsed = now - shop.usagePeriodStart.getTime() >= periodMs;
-  const resetsAt = elapsed
-    ? new Date(now + periodMs)
-    : new Date(shop.usagePeriodStart.getTime() + periodMs);
+  const resetsAt = elapsed ? now + periodMs : shop.usagePeriodStart.getTime() + periodMs;
+  const failedJobs = await prisma.weatherJob.count({
+    where: { shop: session.shop, status: "FAILED" },
+  });
 
   return {
-    current: plan,
+    current: billing.plan,
+    subscription: billing.subscription,
+    testCharge: billing.testCharge,
     used: elapsed ? 0 : shop.usageCount,
-    limit: PLANS[plan].ordersPerPeriod,
-    resetsAt: resetsAt.toISOString(),
-    subscription,
-    testMode: billingIsTest(),
+    resetsAt: new Date(resetsAt).toISOString(),
+    failedJobs,
+    returned: returned
+      ? { status: returned.status, plan: planFromBillingName(returned.name) }
+      : chargeId
+        ? { status: "UNKNOWN", plan: null }
+        : null,
     plans: PLAN_ORDER.map((id) => ({ id, ...PLANS[id], features: planFeatures(id) })),
+    comparison: comparisonRows(),
   };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, billing, session } = await authenticate.admin(request);
+type ActionResult =
+  | { ok: true; confirmationUrl: string }
+  | { ok: true; switchedTo: PlanId }
+  | { ok: false; error: string };
+
+export const action = async ({ request }: ActionFunctionArgs): Promise<ActionResult> => {
+  const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const target = String(form.get("plan")) as PlanId;
-  const isTest = billingIsTest();
+  if (!PLAN_ORDER.includes(target)) return { ok: false, error: "Unknown plan." };
 
-  if (PAID_PLANS.includes(target)) {
-    // Shopify's own approval screen; it sends the merchant back here.
-    const store = session.shop.replace(/\.myshopify\.com$/, "");
-    const returnUrl = `https://admin.shopify.com/store/${store}/apps/${process.env.SHOPIFY_API_KEY}/app/plans`;
-    // Throws the redirect out of the iframe to the confirmation page.
-    await billing.request({ plan: billingName(target), isTest, returnUrl });
-    return { ok: false };
-  }
+  try {
+    const billing = await syncPlan(admin, session.shop);
+    if (billing.plan === target) return { ok: true, switchedTo: target };
 
-  if (target === "FREE") {
-    const { subscription } = await syncPlan(admin, session.shop);
-    if (subscription) {
-      await billing.cancel({ subscriptionId: subscription.id, isTest, prorate: true });
+    if (target === "FREE") {
+      // Cancel first: never mark a shop Free while it's still being billed.
+      if (billing.subscription) await cancelSubscription(admin, billing.subscription.id);
+      await syncPlan(admin, session.shop);
+      return { ok: true, switchedTo: "FREE" };
     }
-    await syncPlan(admin, session.shop);
-    return { ok: true, plan: "FREE" as const };
+
+    if (PAID_PLANS.includes(target)) {
+      // Back into the embedded app after Shopify's approval screen; Shopify
+      // appends charge_id. The current plan stays until the new charge is
+      // approved — declining changes nothing.
+      const store = session.shop.replace(/\.myshopify\.com$/, "");
+      const returnUrl = `https://admin.shopify.com/store/${store}/apps/${process.env.SHOPIFY_API_KEY}/app/plans`;
+      const confirmationUrl = await createSubscription(admin, target, {
+        returnUrl,
+        test: billing.testCharge,
+      });
+      return { ok: true, confirmationUrl };
+    }
+  } catch (err) {
+    console.error("[plans] plan change failed", err instanceof Error ? err.message : err);
+    return {
+      ok: false,
+      error: `We couldn't change your plan: ${err instanceof Error ? err.message : "unknown error"}`,
+    };
   }
-  return { ok: false };
+  return { ok: false, error: "Unknown plan." };
 };
 
-const money = (n: number) =>
-  n === 0 ? "Free" : `$${n.toFixed(2)}`;
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 export default function Plans() {
-  const { current, used, limit, resetsAt, subscription, testMode, plans } =
-    useLoaderData<typeof loader>();
+  const d = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
-  const busyPlan = fetcher.state !== "idle" ? String(fetcher.formData?.get("plan")) : null;
+  const [confirmFree, setConfirmFree] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const pending = fetcher.state !== "idle" ? String(fetcher.formData?.get("plan")) : null;
+  const current = PLANS[d.current];
+  const result = fetcher.data;
 
   useEffect(() => {
-    if (fetcher.data?.ok && fetcher.data.plan === "FREE") {
-      shopify.toast.show("You're on the Free plan");
+    if (!result?.ok) return;
+    if ("confirmationUrl" in result) {
+      // Shopify's approval screen must be a top-level page, not the iframe.
+      window.open(result.confirmationUrl, "_top");
+    } else {
+      shopify.toast.show(`You're on the ${PLANS[result.switchedTo].name} plan`);
     }
-  }, [fetcher.data, shopify]);
+  }, [result, shopify]);
 
-  const choose = (plan: PlanId) => fetcher.submit({ plan }, { method: "POST" });
+  const choose = (plan: PlanId) => {
+    setConfirmFree(false);
+    fetcher.submit({ plan }, { method: "POST" });
+  };
+
+  const limit = current.ordersPerPeriod;
+  const pct = Math.min(100, Math.round((d.used / Math.max(1, limit)) * 100));
   const rank = (id: PlanId) => PLAN_ORDER.indexOf(id);
-  const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
-  const resets = new Date(resetsAt).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-  });
 
   return (
-    <s-page heading="Plans & pricing">
-      {testMode && (
-        <s-banner tone="info">
-          Billing is in test mode: plan changes go through Shopify&apos;s
-          approval screen, but no money is charged.
-        </s-banner>
-      )}
-
-      <s-section heading="This month">
-        <s-stack direction="block" gap="small-200">
-          <s-text>
-            <strong>{PLANS[current].name}</strong> plan · {used.toLocaleString()} of{" "}
-            {limit.toLocaleString()} orders printed with weather · resets {resets}
+    <s-page heading="Plans & pricing" inlineSize="large">
+      {/* ---- current plan + usage (was the Overview page) ---- */}
+      <s-section>
+        <s-stack direction="block" gap="small-300">
+          <s-stack direction="inline" gap="small-200" alignItems="center" justifyContent="space-between">
+            <s-heading>Current plan: {current.name}</s-heading>
+            <s-stack direction="inline" gap="small-200">
+              <s-badge tone="success">Active</s-badge>
+              {d.subscription?.test && <s-badge tone="info">Test charge</s-badge>}
+            </s-stack>
+          </s-stack>
+          <s-text color="subdued">
+            {d.used.toLocaleString()} of {limit.toLocaleString()} orders printed with weather this
+            month · resets {fmtDate(d.resetsAt)}
           </s-text>
           <div
             role="progressbar"
+            aria-label="Orders used this month"
             aria-valuenow={pct}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -121,103 +170,201 @@ export default function Plans() {
               }}
             />
           </div>
-          {pct >= 100 ? (
-            <s-text tone="critical">
-              Limit reached — new slips print without weather until {resets}, or upgrade now.
-            </s-text>
-          ) : pct >= 80 ? (
-            <s-text tone="caution">You&apos;ve used {pct}% of this month&apos;s orders.</s-text>
-          ) : null}
-          {subscription && (
+          {d.subscription?.currentPeriodEnd && (
             <s-text color="subdued">
-              Billed by Shopify on your store invoice
-              {subscription.currentPeriodEnd
-                ? ` · renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`
-                : ""}
-              {subscription.test ? " · test charge" : ""}
+              {current.name} renews {fmtDate(d.subscription.currentPeriodEnd)} · billed on your
+              Shopify invoice
+            </s-text>
+          )}
+          {pct >= 100 && (
+            <s-text tone="critical">
+              Limit reached — new slips print without weather until {fmtDate(d.resetsAt)}. Upgrade
+              to keep weather on every slip.
+            </s-text>
+          )}
+          {pct >= 80 && pct < 100 && (
+            <s-text tone="caution">You&apos;ve used {pct}% of this month&apos;s orders.</s-text>
+          )}
+          {d.failedJobs > 0 && (
+            <s-text tone="caution">
+              {d.failedJobs} order(s) couldn&apos;t save weather after several retries.
             </s-text>
           )}
         </s-stack>
       </s-section>
 
-      <s-grid gridTemplateColumns="@container (inline-size > 700px) 1fr 1fr 1fr, 1fr" gap="base">
-        {plans.map((p) => {
-          const isCurrent = p.id === current;
-          const up = rank(p.id) > rank(current);
-          return (
-            <s-section key={p.id}>
-              <s-stack direction="block" gap="base">
-                <s-stack direction="inline" gap="small-200" alignItems="center">
+      {/* ---- banners ---- */}
+      {d.returned?.status === "ACTIVE" && d.returned.plan && (
+        <s-banner tone="success" heading={`${PLANS[d.returned.plan].name} plan activated`}>
+          Thanks! Your new plan is active now.
+        </s-banner>
+      )}
+      {d.returned && d.returned.status !== "ACTIVE" && (
+        <s-banner tone="warning" heading="Plan not changed">
+          The charge wasn&apos;t approved, so you&apos;re still on the {current.name} plan and
+          nothing was billed. Choose a plan below to try again.
+        </s-banner>
+      )}
+      {result && !result.ok && (
+        <s-banner tone="critical" heading="Something went wrong">
+          {result.error}
+        </s-banner>
+      )}
+      {d.testCharge && (
+        <s-banner tone="info">
+          Test mode: plan changes go through Shopify&apos;s approval screen, but no money is
+          charged.
+        </s-banner>
+      )}
+
+      {/* ---- plan cards ---- */}
+      <s-section heading="All plans">
+        <s-grid gridTemplateColumns="@container (inline-size > 720px) 1fr 1fr 1fr, 1fr" gap="base">
+          {d.plans.map((p) => {
+            const isActive = p.id === d.current;
+            const isFree = p.priceUsd === 0;
+            const up = rank(p.id) > rank(d.current);
+            const confirming = isFree && confirmFree;
+            const label = isActive
+              ? "Activated"
+              : isFree
+                ? confirming
+                  ? `Yes, cancel ${current.name} and switch`
+                  : "Switch to Free"
+                : up
+                  ? `Upgrade to ${p.name}`
+                  : `Downgrade to ${p.name}`;
+            return (
+              <div
+                key={p.id}
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  padding: 16,
+                  borderRadius: 12,
+                  background: "#fff",
+                  boxShadow: isActive ? "0 4px 14px rgba(0,0,0,.10)" : "0 1px 3px rgba(0,0,0,.08)",
+                  border: isActive
+                    ? "2px solid #29845a"
+                    : p.highlight
+                      ? "2px solid #1f6fdb"
+                      : "1px solid #e3e3e3",
+                }}
+              >
+                <s-stack direction="inline" gap="small-200" alignItems="center" justifyContent="space-between">
                   <s-heading>{p.name}</s-heading>
-                  {isCurrent && <s-badge tone="success">Current plan</s-badge>}
-                  {p.id === "STARTER" && !isCurrent && <s-badge tone="info">Popular</s-badge>}
+                  {isActive ? (
+                    <s-badge tone="success">Current plan</s-badge>
+                  ) : p.highlight ? (
+                    <s-badge tone="info">{p.highlight}</s-badge>
+                  ) : null}
                 </s-stack>
-                <s-text>
-                  <span style={{ fontSize: 28, fontWeight: 650 }}>{money(p.priceUsd)}</span>
-                  {p.priceUsd > 0 ? " / month" : ""}
-                </s-text>
+                <div>
+                  <span style={{ fontSize: 30, fontWeight: 700 }}>
+                    {isFree ? "$0" : `$${p.priceUsd.toFixed(2)}`}
+                  </span>
+                  <s-text color="subdued"> / month</s-text>
+                  <div>
+                    <s-text color="subdued">
+                      {isFree ? "Free forever · no card needed" : "Billed every 30 days by Shopify"}
+                    </s-text>
+                  </div>
+                </div>
                 <s-text color="subdued">{p.tagline}</s-text>
-                <s-unordered-list>
-                  {p.features.map((f) => (
-                    <s-list-item key={f}>{f}</s-list-item>
-                  ))}
-                </s-unordered-list>
-                {isCurrent ? (
-                  <s-button disabled>Current plan</s-button>
-                ) : p.id === "FREE" ? (
-                  <s-button commandFor="downgrade-free" command="--show">
-                    Switch to Free
-                  </s-button>
-                ) : (
-                  <s-button
-                    variant={up ? "primary" : "secondary"}
-                    onClick={() => choose(p.id)}
-                    {...(busyPlan === p.id ? { loading: true } : {})}
-                  >
-                    {up ? `Upgrade to ${p.name}` : `Switch to ${p.name}`}
+                <div style={{ borderTop: "1px solid #ebebeb" }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {p.features.map((f) =>
+                    /^Everything in /i.test(f) ? (
+                      <s-text key={f} type="strong" color="subdued">
+                        {f}
+                      </s-text>
+                    ) : (
+                      <div key={f} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                        <span style={{ color: "#29845a", fontWeight: 700 }}>✓</span>
+                        <s-text>{f}</s-text>
+                      </div>
+                    ),
+                  )}
+                </div>
+                <div style={{ flex: 1 }} />
+                {confirming && (
+                  <s-text tone="critical">
+                    This cancels your {current.name} subscription in Shopify now (unused time is
+                    credited). You&apos;ll have {PLANS.FREE.ordersPerPeriod} orders a month printed
+                    with weather.
+                  </s-text>
+                )}
+                <s-button
+                  variant={isActive ? "secondary" : "primary"}
+                  tone={confirming ? "critical" : undefined}
+                  disabled={isActive || (pending !== null && pending !== p.id)}
+                  {...(pending === p.id ? { loading: true } : {})}
+                  onClick={() => {
+                    if (isFree && !confirming) {
+                      setConfirmFree(true);
+                      return;
+                    }
+                    choose(p.id);
+                  }}
+                >
+                  {label}
+                </s-button>
+                {confirming && (
+                  <s-button variant="tertiary" onClick={() => setConfirmFree(false)}>
+                    Keep my {current.name} plan
                   </s-button>
                 )}
-              </s-stack>
-            </s-section>
-          );
-        })}
-      </s-grid>
+              </div>
+            );
+          })}
+        </s-grid>
+      </s-section>
 
-      <s-modal id="downgrade-free" heading="Switch to the Free plan?">
-        <s-paragraph>
-          Your {PLANS[current].name} subscription is cancelled now, with any
-          unused time credited by Shopify. You&apos;ll have{" "}
-          {PLANS.FREE.ordersPerPeriod} orders a month printed with weather.
-          Orders that already have weather keep it.
-        </s-paragraph>
-        <s-button
-          slot="primary-action"
-          tone="critical"
-          commandFor="downgrade-free"
-          command="--hide"
-          onClick={() => choose("FREE")}
-        >
-          Switch to Free
-        </s-button>
-        <s-button slot="secondary-actions" commandFor="downgrade-free" command="--hide">
-          Keep {PLANS[current].name}
-        </s-button>
-      </s-modal>
+      {/* ---- full comparison ---- */}
+      <s-section>
+        <s-stack direction="inline" alignItems="center" justifyContent="space-between">
+          <s-heading>Compare all features</s-heading>
+          <s-button variant="tertiary" onClick={() => setShowCompare((v) => !v)}>
+            {showCompare ? "Hide" : "Show"}
+          </s-button>
+        </s-stack>
+        {showCompare && (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header listSlot="primary"></s-table-header>
+              {d.plans.map((p) => (
+                <s-table-header key={p.id}>{p.name}</s-table-header>
+              ))}
+            </s-table-header-row>
+            <s-table-body>
+              {d.comparison.map(([label, ...cells]) => (
+                <s-table-row key={label}>
+                  <s-table-cell>{label}</s-table-cell>
+                  {cells.map((c, i) => (
+                    <s-table-cell key={i}>{c}</s-table-cell>
+                  ))}
+                </s-table-row>
+              ))}
+            </s-table-body>
+          </s-table>
+        )}
+      </s-section>
 
       <s-section slot="aside" heading="How plans work">
         <s-paragraph>
-          Plans count orders, not weather lookups. An order counts once, the
-          first time its packing slip is printed with weather. Reprints are
-          always free, and orders you never print never count.
+          Plans count orders, not weather lookups. An order counts once, the first time its
+          packing slip is printed with weather. Reprints are always free, and orders you never
+          print never count.
         </s-paragraph>
         <s-paragraph>
-          The count resets every {USAGE_PERIOD_DAYS} days. At the limit, slips
-          still print — just without the weather — until it resets or you
-          upgrade.
+          The count resets every {USAGE_PERIOD_DAYS} days. At the limit, slips still print — just
+          without the weather — until it resets or you upgrade.
         </s-paragraph>
         <s-paragraph>
-          Charges appear on your Shopify invoice. Upgrades take effect straight
-          away; you can switch or cancel any time.
+          Upgrades and downgrades take effect as soon as you approve them in Shopify; switching to
+          Free cancels straight away. Charges appear on your Shopify invoice.
         </s-paragraph>
       </s-section>
     </s-page>

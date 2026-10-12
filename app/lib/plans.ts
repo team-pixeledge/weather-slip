@@ -13,6 +13,8 @@ export interface PlanLimits {
   ownApiKey: boolean;
   /** One-line pitch for the Plans page. */
   tagline: string;
+  /** Badge on the plan card (e.g. "Most popular"). */
+  highlight?: string;
 }
 
 export const PLANS: Record<PlanId, PlanLimits> = {
@@ -33,6 +35,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     dispatchForecast: true,
     ownApiKey: false,
     tagline: "For growing shops shipping every day.",
+    highlight: "Most popular",
   },
   PRO: {
     name: "Pro",
@@ -55,20 +58,44 @@ export function planFromBillingName(name: string): PlanId | null {
   return PAID_PLANS.find((id) => PLANS[id].name === name) ?? null;
 }
 
-/** What each plan includes, for the comparison on the Plans page. */
+/** Short list for each plan card ("Everything in X, plus" style). */
 export function planFeatures(id: PlanId): string[] {
   const p = PLANS[id];
+  const orders = `${p.ordersPerPeriod.toLocaleString("en-US")} orders a month printed with weather`;
+  if (id === "FREE") {
+    return [
+      orders,
+      "Print one slip or many, plus a customer list",
+      "All 4 slip templates",
+      "Destination forecast for every day",
+      "Reprints are always free",
+    ];
+  }
+  if (id === "STARTER") {
+    return [
+      "Everything in Free, plus",
+      orders,
+      "Dispatch-day forecast in saved weather",
+      "Weather on Shopify's packing slip, Order Printer and emails",
+    ];
+  }
+  return ["Everything in Starter, plus", orders, "Use your own OpenWeather API key"];
+}
+
+/** Rows for the "Compare all features" table: label, then one cell per plan. */
+export function comparisonRows(): [string, ...string[]][] {
+  const yes = (b: boolean) => (b ? "✓" : "—");
+  const each = (f: (p: PlanLimits) => string) => PLAN_ORDER.map((id) => f(PLANS[id]));
   return [
-    `${p.ordersPerPeriod.toLocaleString("en-US")} orders a month printed with weather`,
-    "Reprints are always free",
-    "Bulk packing slips and customer list",
-    "Destination forecast for every day, delivery day marked",
-    p.dispatchForecast ? "Dispatch-day forecast in saved weather" : null,
-    p.allTemplates
-      ? "Weather on Shopify packing slips, Order Printer and emails"
-      : "Weather on Shopify's packing slip",
-    p.ownApiKey ? "Use your own OpenWeather API key" : null,
-  ].filter((f): f is string => f != null);
+    ["Orders printed with weather / month", ...each((p) => p.ordersPerPeriod.toLocaleString("en-US"))],
+    ["Reprints", ...each(() => "Free")],
+    ["Bulk packing slips + customer list", ...each(() => "✓")],
+    ["Slip templates (Classic, Minimal, Detailed, 4×6 label)", ...each(() => "✓")],
+    ["Forecast for every day to delivery", ...each(() => "✓")],
+    ["Dispatch-day forecast in saved weather", ...each((p) => yes(p.dispatchForecast))],
+    ["Weather on Shopify's slip, Order Printer, emails", ...each((p) => (p.allTemplates ? "✓" : "Packing slip only"))],
+    ["Your own OpenWeather API key", ...each((p) => yes(p.ownApiKey))],
+  ];
 }
 
 export const USAGE_PERIOD_DAYS = 30;

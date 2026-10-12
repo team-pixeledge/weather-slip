@@ -5,7 +5,13 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { listOrders } from "../lib/orders.server";
-import { MAX_PRINT_ORDERS, ORDER_VIEWS, type OrderView } from "../lib/order-views";
+import {
+  MAX_PRINT_ORDERS,
+  ORDER_RANGES,
+  ORDER_VIEWS,
+  type OrderRange,
+  type OrderView,
+} from "../lib/order-views";
 import { ensureShop } from "../lib/shop.server";
 import { isSlipTemplate, SLIP_TEMPLATES, type SlipTemplate } from "../lib/slip";
 import { signPrintToken } from "../lib/print-token.server";
@@ -41,10 +47,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ? (viewParam as OrderView)
     : "unfulfilled";
   const search = (url.searchParams.get("q") ?? "").slice(0, 200);
+  const rangeParam = url.searchParams.get("range");
+  const range: OrderRange = ORDER_RANGES.some((r) => r.id === rangeParam)
+    ? (rangeParam as OrderRange)
+    : "any";
 
   const { rows, pageInfo } = await listOrders(admin, {
     view,
     search,
+    range,
     after: url.searchParams.get("after"),
     before: url.searchParams.get("before"),
   });
@@ -61,6 +72,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     view,
     search,
+    range,
     rows: rows.map((r) => ({ ...r, weather: weather[r.id] ?? null })),
     pageInfo,
     printToken: signPrintToken(session.shop),
@@ -69,7 +81,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function Orders() {
-  const { view, search, rows, pageInfo, printToken, defaultTemplate } =
+  const { view, search, range, rows, pageInfo, printToken, defaultTemplate } =
     useLoaderData<typeof loader>();
   // Template for this print; starts at the shop's saved default.
   const [template, setTemplate] = useState<SlipTemplate>(defaultTemplate);
@@ -172,6 +184,20 @@ export default function Orders() {
               {ORDER_VIEWS.map((v) => (
                 <s-option key={v.id} value={v.id}>
                   {v.label}
+                </s-option>
+              ))}
+            </s-select>
+            <s-select
+              label="Date"
+              labelAccessibilityVisibility="exclusive"
+              value={range}
+              onChange={(e) =>
+                update({ range: e.currentTarget.value === "any" ? null : e.currentTarget.value, after: null, before: null })
+              }
+            >
+              {ORDER_RANGES.map((r) => (
+                <s-option key={r.id} value={r.id}>
+                  {r.label}
                 </s-option>
               ))}
             </s-select>

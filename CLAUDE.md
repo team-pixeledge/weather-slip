@@ -60,7 +60,10 @@ and deploy traps this app's config already avoids).
 ## Orders page + printed packing slips (added 2026-10-12)
 
 `/app/orders` lists the shop's orders live from Shopify (views Unfulfilled
-= open + unfulfilled/partial, On hold, All open; search is Shopify's own
+= open + unfulfilled/partial, On hold, All open, Fulfilled, All orders;
+date range Any time/30/60/180/365 days via `created_at:>=`; orders older
+than 60 days need `read_all_orders`, which Shopify must approve for the app
+— keep Vercel's `SCOPES` env in step with the toml, or auth loops; search is Shopify's own
 order search, bracketed so it can't widen the view; cursor pagination;
 selection kept across pages). "Print packing slips" / "Print customer
 list" (max 50 orders, `order-views.ts`) open `/print/slips` or
@@ -109,18 +112,28 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.
 
-## Plans & billing (added 2026-10-12)
+## Plans & billing (added 2026-10-12, reworked same day)
 
-Billing API, not Shopify managed pricing: `shopify.server.ts` builds the
-`billing` config from `PLANS` (Starter $4.99, Pro $9.99, every 30 days; no
-trial). `/app/plans` shows usage + plan cards; upgrade = `billing.request`
-(Shopify approval screen, returns to `/app/plans` via
-admin.shopify.com/store/<handle>/apps/<api key>), Free = `billing.cancel`
-(prorated). `syncPlan` (`billing.server.ts`) reads
-`currentAppInstallation.activeSubscriptions` and writes `Shop.plan`; it runs
-on every Plans page load and on the `app_subscriptions/update` webhook.
-**Test charges until `SHOPIFY_BILLING_TEST=false`** is set in Vercel for
-launch; with it false, test subscriptions no longer unlock a plan.
+`/app/plans` is also the app's overview (the Overview page was merged in;
+`/app` now redirects to `/app/orders`). Layout follows
+store-performance-monitor's `billing/select-plan`: current-plan card with
+usage, equal-height plan cards (active = green border, "Activated"), Free
+switch confirmed inline, "Compare all features" table.
+- Billing API called directly (`billing.server.ts`), not the library's
+  `billing.request` (it always answers with a redirect, hiding Shopify's
+  userErrors). `appSubscriptionCreate` with `replacementBehavior:
+  APPLY_IMMEDIATELY` for upgrades and downgrades; the action returns the
+  confirmationUrl and the page opens it with `window.open(url, "_top")`.
+  Return URL = admin.shopify.com/store/<handle>/apps/<api key>/app/plans;
+  Shopify appends `charge_id`, whose status the loader reads for the
+  activated/declined banner. Current plan stays until the new charge is
+  approved. Free = `appSubscriptionCancel(prorate: true)` first, then sync.
+- `syncPlan` reads `currentAppInstallation.activeSubscriptions` and writes
+  `Shop.plan`; runs on every Plans load, before every plan change, and on
+  the `app_subscriptions/update` webhook.
+- Test charges while `SHOPIFY_BILLING_TEST` isn't "false", and always on
+  development stores (`shop.plan.partnerDevelopment`). A test subscription
+  only unlocks a plan in those same conditions.
 
 ## Weather providers
 

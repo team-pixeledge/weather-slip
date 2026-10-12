@@ -2,7 +2,7 @@
 // street address and phone are read from Shopify at print time and only
 // rendered — never stored (Level 2 protected customer data).
 
-import { MAX_PRINT_ORDERS, ORDER_VIEWS, type OrderView } from "./order-views";
+import { MAX_PRINT_ORDERS, ORDER_VIEWS, type OrderRange, type OrderView } from "./order-views";
 
 export interface GraphqlClient {
   graphql(
@@ -39,11 +39,23 @@ async function query<T>(
 
 // ---------- list ----------
 
-export function orderSearchQuery(view: OrderView, search: string): string {
+export function orderSearchQuery(
+  view: OrderView,
+  search: string,
+  range: OrderRange = "any",
+  now = new Date(),
+): string {
+  const parts: string[] = [];
   const base = (ORDER_VIEWS.find((v) => v.id === view) ?? ORDER_VIEWS[0]!).filter;
+  if (base) parts.push(base);
+  if (range !== "any") {
+    const since = new Date(now.getTime() - Number(range) * 86_400_000).toISOString().slice(0, 10);
+    parts.push(`created_at:>=${since}`);
+  }
   const s = search.trim();
   // Parenthesised so a typed "OR" can't widen the view's filter.
-  return s ? `${base} AND (${s})` : base;
+  if (s) parts.push(`(${s})`);
+  return parts.join(" AND ");
 }
 
 const LIST_QUERY = `#graphql
@@ -125,11 +137,18 @@ export const numericId = (gid: string) => gid.slice(gid.lastIndexOf("/") + 1);
 
 export async function listOrders(
   admin: GraphqlClient,
-  opts: { view: OrderView; search: string; after?: string | null; before?: string | null; pageSize?: number },
+  opts: {
+    view: OrderView;
+    search: string;
+    range?: OrderRange;
+    after?: string | null;
+    before?: string | null;
+    pageSize?: number;
+  },
 ) {
   const size = opts.pageSize ?? 25;
   const data = await query<ListData>(admin, LIST_QUERY, {
-    query: orderSearchQuery(opts.view, opts.search),
+    query: orderSearchQuery(opts.view, opts.search, opts.range) || null,
     ...(opts.before ? { last: size, before: opts.before } : { first: size, after: opts.after ?? null }),
   });
   const rows: OrderRow[] = data.orders.nodes.map((o) => {
