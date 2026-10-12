@@ -3,6 +3,7 @@ api_version = "2026-07"
 [[extensions]]
 name = "Weather slip"
 handle = "weather-slip-print-bulk"
+uid = "ef071a5f-ceac-af3f-7c19-f8415c40cd2c87526fdb"
 type = "ui_extension"
 
 # Only 1 target can be specified for each admin print action extension
