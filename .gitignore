@@ -15,6 +15,7 @@ database.sqlite
 
 .env
 .env.*
+.env*.local
 !.env.example
 
 yarn.lock
@@ -32,5 +33,19 @@ pnpm-lock.yaml
 
 # Vercel build output
 .vercel
-.env*
-!.env.example
+
+# AI-assistant skills installed locally by Vercel/Neon tooling — per
+# developer, not part of the app
+.agents/
+.claude/
+skills-lock.json
+
+# Logs, caches and editor/OS leftovers
+*.log
+npm-debug.log*
+*.tsbuildinfo
+.eslintcache
+coverage/
+.idea/
+.vscode/
+*.swp
