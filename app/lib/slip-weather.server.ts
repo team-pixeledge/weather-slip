@@ -1,21 +1,59 @@
 import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
+import { METAFIELD_FORECAST_KEY, METAFIELD_NAMESPACE } from "./constants";
 import { enqueue } from "./jobs.server";
 import { cacheKey } from "./location";
 import { orderShippingDates } from "./order-weather.server";
-import type { PrintOrder } from "./orders.server";
+import { query, type GraphqlClient, type PrintOrder } from "./orders.server";
 import { countOrder, providerFor } from "./shop.server";
-import { slipForecast, type SlipWeather } from "./slip";
+import { parseSavedSlipWeather, slipForecast, type SlipWeather } from "./slip";
 import { destinationToday } from "./snapshot";
 import { cachedForecast, cachedGeocode } from "./weather/cache.server";
 import type { ForecastPayload, GeoPoint } from "./weather/types";
 
+const SAVE_FORECASTS = `#graphql
+  mutation WeatherSlipSaveForecast($metafields: [MetafieldsSetInput!]!) {
+    metafieldsSet(metafields: $metafields) { userErrors { field message } }
+  }`;
+
+/**
+ * Save each freshly fetched slip forecast on its order
+ * (weather_slip.forecast), so reprints read it back instead of calling the
+ * weather API. metafieldsSet takes at most 25 per call. Never throws: a
+ * failed save only means the next print fetches again.
+ */
+async function saveForecasts(admin: GraphqlClient, fresh: [string, SlipWeather][]) {
+  for (let i = 0; i < fresh.length; i += 25) {
+    const metafields = fresh.slice(i, i + 25).map(([id, w]) => ({
+      ownerId: `gid://shopify/Order/${id}`,
+      namespace: METAFIELD_NAMESPACE,
+      key: METAFIELD_FORECAST_KEY,
+      type: "json",
+      value: JSON.stringify(w),
+    }));
+    try {
+      const data = await query<{ metafieldsSet: { userErrors: { message: string }[] } }>(
+        admin,
+        SAVE_FORECASTS,
+        { metafields },
+      );
+      const errs = data.metafieldsSet.userErrors;
+      if (errs.length) console.warn("[slip-weather] save:", errs.map((e) => e.message).join("; "));
+    } catch (err) {
+      console.warn("[slip-weather] save failed:", err instanceof Error ? err.message : err);
+    }
+  }
+}
+
 /**
  * Destination forecast for each order being printed, keyed by numeric
- * order ID. This is the live forecast at print time (the 3h shared cache),
- * from today at the destination through the provider's horizon — the
- * packing slip is printed when the parcel is packed, so that's the window
- * that matters. The order's saved metafield snapshot is untouched.
+ * order ID.
+ *
+ * One weather lookup per order, ever: the first print fetches the forecast
+ * (from today at the destination through the provider's horizon — slips
+ * are printed at packing time) and saves it on the order as the
+ * weather_slip.forecast metafield. Every reprint reads that back: no API
+ * call, no usage, the same slip every time.
  *
  * This is where orders get counted: plans count orders whose slip is
  * printed with weather, not API calls. The first print of an order with a
@@ -26,6 +64,7 @@ import type { ForecastPayload, GeoPoint } from "./weather/types";
 export async function weatherForSlips(
   shop: Shop,
   orders: PrintOrder[],
+  admin: GraphqlClient,
   now = new Date(),
 ): Promise<Map<string, SlipWeather>> {
   const provider = providerFor(shop);
@@ -52,10 +91,17 @@ export async function weatherForSlips(
   };
 
   const out = new Map<string, SlipWeather>();
+  const fresh: [string, SlipWeather][] = [];
 
   await Promise.all(
     orders.map(async (order, i) => {
       const id = ids[i]!;
+      // Printed before: reuse the forecast saved on the order.
+      const saved = parseSavedSlipWeather(order.savedForecast?.value);
+      if (saved) {
+        out.set(id, saved);
+        return;
+      }
       const snap = snapBy.get(id);
       const computed = orderShippingDates(order, shop);
       // Keep the dates the saved snapshot used, so slip and metafield agree.
@@ -87,19 +133,22 @@ export async function weatherForSlips(
           await enqueue(shop.shop, id, snap ? "REFRESH" : "CREATE");
         }
         const forecast = await forecastFor(point);
-        out.set(id, {
+        const w: SlipWeather = {
           status: "ok",
           ...place,
           dispatch,
           delivery,
           ...slipForecast(forecast, destinationToday(forecast, now), provider.horizonDays),
           asOf: now.toISOString(),
-        });
+        };
+        out.set(id, w);
+        fresh.push([id, w]);
       } catch (err) {
         console.error("[slip-weather]", id, err instanceof Error ? err.message : err);
         out.set(id, { status: "error", ...place, dispatch, delivery });
       }
     }),
   );
+  if (fresh.length) await saveForecasts(admin, fresh);
   return out;
 }

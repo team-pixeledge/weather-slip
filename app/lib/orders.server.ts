@@ -212,6 +212,7 @@ const PRINT_QUERY = `#graphql
           name company address1 address2 city province zip country phone
         }
         fulfillments(first: 5) { createdAt estimatedDeliveryAt }
+        savedForecast: metafield(namespace: "weather_slip", key: "forecast") { value }
         currencyCode
         currentSubtotalPriceSet { shopMoney { amount } }
         currentTotalDiscountsSet { shopMoney { amount } }
@@ -280,6 +281,8 @@ export interface PrintOrder {
   billingAddress: PrintAddress | null;
   fulfillments: { createdAt: string; estimatedDeliveryAt: string | null }[];
   lineItems: { nodes: PrintLineItem[] };
+  /** weather_slip.forecast: the slip forecast saved at the first print. */
+  savedForecast?: { value: string } | null;
   // Prices for the Detailed template (not customer data).
   currencyCode?: string;
   currentSubtotalPriceSet?: Money;

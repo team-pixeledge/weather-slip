@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PrintOrder, PrintShop } from "../app/lib/orders.server";
 import { orderSearchQuery } from "../app/lib/orders.server";
 import { signPrintToken, verifyPrintToken, PRINT_TOKEN_TTL_MS } from "../app/lib/print-token.server";
-import { escapeHtml, renderCustomerList, renderPackingSlips, slipForecast, type SlipWeather } from "../app/lib/slip";
+import { escapeHtml, parseSavedSlipWeather, renderCustomerList, renderPackingSlips, slipForecast, type SlipWeather } from "../app/lib/slip";
 import type { ForecastPayload } from "../app/lib/weather/types";
 
 const forecast: ForecastPayload = {
@@ -170,5 +170,17 @@ describe("renderCustomerList", () => {
     });
     expect(html).toContain("#1002");
     expect(html.match(/<tr>/g)).toHaveLength(3); // header + 2
+  });
+});
+
+describe("saved forecast (weather_slip.forecast)", () => {
+  it("round-trips, so a reprint matches the first print", () => {
+    expect(parseSavedSlipWeather(JSON.stringify(weather))).toEqual(weather);
+  });
+  it("ignores anything malformed instead of printing it", () => {
+    expect(parseSavedSlipWeather(null)).toBeNull();
+    expect(parseSavedSlipWeather("not json")).toBeNull();
+    expect(parseSavedSlipWeather(JSON.stringify({ ...weather, status: "limit_reached" }))).toBeNull();
+    expect(parseSavedSlipWeather(JSON.stringify({ ...weather, days: [{ date: "x" }] }))).toBeNull();
   });
 });

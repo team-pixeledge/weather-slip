@@ -34,6 +34,49 @@ export type SlipWeather =
     })
   | (SlipBase & { status: "no_location" | "limit_reached" | "error" });
 
+/**
+ * Read a forecast saved on an order (weather_slip.forecast) back into a
+ * printable SlipWeather. Anything malformed reads as null, so the slip just
+ * fetches fresh weather instead of printing garbage.
+ */
+export function parseSavedSlipWeather(value: string | null | undefined): SlipWeather | null {
+  if (!value) return null;
+  try {
+    const v = JSON.parse(value) as Record<string, unknown>;
+    const str = (x: unknown) => typeof x === "string";
+    const num = (x: unknown) => typeof x === "number" && Number.isFinite(x);
+    if (v.status !== "ok" || !str(v.dispatch) || !str(v.delivery) || !str(v.horizonEnd) || !str(v.asOf)) {
+      return null;
+    }
+    if (!Array.isArray(v.days)) return null;
+    const days: SlipDay[] = [];
+    for (const d of v.days as Record<string, unknown>[]) {
+      if (!d || !str(d.date) || !num(d.minC) || !num(d.maxC) || !str(d.label)) return null;
+      days.push({
+        date: d.date as string,
+        minC: d.minC as number,
+        maxC: d.maxC as number,
+        precipProb: num(d.precipProb) ? (d.precipProb as number) : null,
+        label: d.label as string,
+      });
+    }
+    const cur = v.current as Record<string, unknown> | null | undefined;
+    return {
+      status: "ok",
+      city: str(v.city) ? (v.city as string) : null,
+      countryCode: str(v.countryCode) ? (v.countryCode as string) : null,
+      dispatch: v.dispatch as string,
+      delivery: v.delivery as string,
+      current: cur && num(cur.tempC) && str(cur.label) ? { tempC: cur.tempC as number, label: cur.label as string } : null,
+      days,
+      horizonEnd: v.horizonEnd as string,
+      asOf: v.asOf as string,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Every forecast day from today at the destination through the horizon. */
 export function slipForecast(
   forecast: ForecastPayload,

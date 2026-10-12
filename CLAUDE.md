@@ -80,12 +80,15 @@ PDF (no headless Chrome on Vercel).
   Orders loader. Order IDs go in the URL and are fetched with that shop's
   offline token, so a token can't reach another shop. Responses are
   `no-store`, `no-referrer`, nonce-CSP, images from cdn.shopify.com only.
-- **Slip weather is the live forecast at print time** (shared 3h cache),
-  every day from today at the destination to the provider horizon, with
-  dispatch/delivery outlined (`slip.ts`, pure + tested). It deliberately
-  doesn't touch the saved metafield snapshot, which still follows the
-  "reprints never change" rule; the slip reuses the snapshot's
-  dispatch/delivery dates when one exists so the two agree.
+- **Slip weather: one lookup per order, ever** (user requirement
+  2026-10-12). The first print fetches the forecast (today at the
+  destination → provider horizon, dispatch/delivery outlined) and saves it
+  on the order as metafield `weather_slip.forecast` (JSON SlipWeather,
+  `parseSavedSlipWeather` reads it back). Every reprint — in-app or from
+  Shopify's Print menu — uses that: no weather/geocode API call, no usage,
+  identical slip. Only "ok" forecasts are saved, so a limit-reached or
+  no-address print can still get weather later. The slip reuses the
+  snapshot's dispatch/delivery dates when one exists.
 - **Plan limits on print:** each order with a usable destination goes
   through `countOrder` (no destination → no weather, no count); refused →
   the slip prints "plan limit reached" instead of weather. An order without

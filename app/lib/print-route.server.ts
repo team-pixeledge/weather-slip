@@ -78,7 +78,7 @@ async function renderPrint(
   if (kind === "customers") {
     html = renderCustomerList(shopInfo, orders, doc);
   } else {
-    const weather = await weatherForSlips(shop, orders);
+    const weather = await weatherForSlips(shop, orders, admin);
     // Orders that had no snapshot yet were queued; get them saved now.
     runInBackground(drainQueue({ budgetMs: 20_000 }));
     // The shop's saved slip settings; a tpl picks another template for this
