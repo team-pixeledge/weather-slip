@@ -182,3 +182,21 @@ describe("line items", () => {
     expect(byName.indexOf("Live plant")).toBeLessThan(byName.indexOf("Organic"));
   });
 });
+
+describe("logo size", () => {
+  const logo = "https://cdn.shopify.com/s/files/logo.png";
+  it("uses the chosen pixel height and width cap, clamped", () => {
+    const d = sanitizeDesign({ logoSource: "custom", logoUrl: logo, logoHeight: 120, logoMaxWidth: 300 });
+    const html = render({ design: d });
+    expect(html).toContain("max-height:120px;max-width:300px");
+    expect(sanitizeDesign({ logoHeight: 5000 }).logoHeight).toBe(200);
+    expect(sanitizeDesign({ logoHeight: "abc" }).logoHeight).toBe(56);
+  });
+  it("maps the old Small/Medium/Large setting", () => {
+    expect(sanitizeDesign({ logoSize: "L" }).logoHeight).toBe(80);
+  });
+  it("halves it on shipping labels", () => {
+    const d = sanitizeDesign({ logoSource: "custom", logoUrl: logo, logoHeight: 80 });
+    expect(render({ template: "LABEL_4X6", design: d })).toContain("max-height:40px");
+  });
+});

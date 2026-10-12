@@ -281,7 +281,11 @@ export interface SlipDesign {
   /** Custom logo link. https://cdn.shopify.com/… only — the print page's CSP allows no other image host. */
   logoUrl: string | null;
   logoPosition: LogoPosition;
-  logoSize: SizeKey;
+  logoSize: SizeKey; // legacy preset; logoHeight wins
+  /** Logo height in px on full-page templates (labels scale it down). */
+  logoHeight: number;
+  /** Widest the logo may get, in px, so wide wordmarks don't overrun. */
+  logoMaxWidth: number;
   /** null = the template's own title ("Packing slip"). */
   title: string | null;
   /** Message shown under the header, e.g. "Live plants — open on arrival". */
@@ -333,6 +337,8 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   logoUrl: null,
   logoPosition: "left",
   logoSize: "M",
+  logoHeight: 56,
+  logoMaxWidth: 220,
   title: null,
   headerNote: null,
   showOrderDate: true,
@@ -379,6 +385,20 @@ export const TEXT_MAX = {
 export const isShopifyCdnUrl = (v: string) =>
   /^https:\/\/cdn\.shopify\.com\/[^\s"'<>]{1,480}$/.test(v);
 
+export const LOGO_PRESET_PX: Record<SizeKey, number> = { S: 36, M: 56, L: 80 };
+
+function clampInt(
+  v: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isFinite(n)
+    ? Math.min(max, Math.max(min, Math.round(n)))
+    : fallback;
+}
+
 /** Coerce anything (stored JSON, a request body) into a valid design. */
 export function sanitizeDesign(raw: unknown): SlipDesign {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<
@@ -409,6 +429,14 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     logoUrl,
     logoPosition: pick("logoPosition", ["left", "center", "right"] as const),
     logoSize: pick("logoSize", ["S", "M", "L"] as const),
+    // Older saves only had a preset size; map it to pixels.
+    logoHeight: clampInt(
+      r.logoHeight,
+      20,
+      200,
+      LOGO_PRESET_PX[pick("logoSize", ["S", "M", "L"] as const)],
+    ),
+    logoMaxWidth: clampInt(r.logoMaxWidth, 60, 500, d.logoMaxWidth),
     title: text("title"),
     headerNote: text("headerNote"),
     showOrderDate: bool("showOrderDate"),
@@ -849,11 +877,13 @@ function shopFooter(shop: PrintShop, o: SlipOptions): string {
   return body.trim() ? `<footer>${body}</footer>` : "";
 }
 
-const LOGO_PX: Record<SizeKey, number> = { S: 36, M: 56, L: 80 };
-
-function logoHtml(d: SlipDesign, px = LOGO_PX[d.logoSize]): string {
+function logoHtml(
+  d: SlipDesign,
+  px = d.logoHeight,
+  maxW = d.logoMaxWidth,
+): string {
   return d.logoUrl
-    ? `<img class="logo" src="${escapeHtml(d.logoUrl)}" alt="" style="max-height:${px}px">`
+    ? `<img class="logo" src="${escapeHtml(d.logoUrl)}" alt="" style="max-height:${px}px;max-width:${maxW}px">`
     : "";
 }
 
@@ -961,7 +991,12 @@ function labelPage(order: PrintOrder, c: PageCtx): string {
     })
     .join("");
   const d = c.o.design;
-  const logo = logoHtml(d, { S: 22, M: 30, L: 40 }[d.logoSize]);
+  // A 4-inch label has less room: half the chosen size, 16–60 px.
+  const logo = logoHtml(
+    d,
+    Math.min(60, Math.max(16, Math.round(d.logoHeight / 2))),
+    Math.min(200, d.logoMaxWidth),
+  );
   return `
     <article class="page">
       <header>
@@ -995,7 +1030,7 @@ const BASE_STYLES = `
   header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   header h1 { font-size: 1.85em; color: var(--accent, #111); }
   header .brand { display: flex; align-items: center; gap: 12px; }
-  .logo { display: block; max-width: 220px; object-fit: contain; }
+  .logo { display: block; object-fit: contain; }
   header .meta .logo { margin: 0 0 6px auto; }
   .logo-center { display: flex; justify-content: center; margin-bottom: 10px; }
   .headnote { border-left: 4px solid var(--accent, #111); background: #f6f6f6; padding: 8px 10px; margin: 0 0 12px; font-weight: 600; }

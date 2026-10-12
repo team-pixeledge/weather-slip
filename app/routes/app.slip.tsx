@@ -121,10 +121,6 @@ export default function PackingSlip() {
     d.logoSource === "custom" &&
     !!d.logoUrl &&
     !isShopifyCdnUrl(d.logoUrl.trim());
-  const hasLogo =
-    d.logoSource === "store"
-      ? !!loaded.brandLogoUrl
-      : d.logoSource === "custom" && !!d.logoUrl;
 
   const opt = (key: OptionKey, label: string, disabled = false) => (
     <s-checkbox
@@ -287,7 +283,7 @@ export default function PackingSlip() {
                 <s-select
                   label="Logo position"
                   value={d.logoPosition}
-                  disabled={!hasLogo}
+                  disabled={d.logoSource === "none"}
                   onChange={(e) =>
                     setD({
                       logoPosition: e.currentTarget
@@ -301,20 +297,48 @@ export default function PackingSlip() {
                     Right, above the order number
                   </s-option>
                 </s-select>
-                <s-select
-                  label="Logo size"
-                  value={d.logoSize}
-                  disabled={!hasLogo}
-                  onChange={(e) =>
-                    setD({
-                      logoSize: e.currentTarget.value as SlipDesign["logoSize"],
-                    })
-                  }
-                >
-                  <s-option value="S">Small</s-option>
-                  <s-option value="M">Medium</s-option>
-                  <s-option value="L">Large</s-option>
-                </s-select>
+                <s-number-field
+                  label="Logo height (px)"
+                  details="20–200 px. Shipping labels print it at half this size."
+                  min={20}
+                  max={200}
+                  step={4}
+                  value={String(d.logoHeight)}
+                  onInput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    if (Number.isFinite(v)) setD({ logoHeight: v });
+                  }}
+                />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {(
+                    [
+                      ["Small", 36],
+                      ["Medium", 56],
+                      ["Large", 80],
+                      ["Extra large", 120],
+                    ] as const
+                  ).map(([label, px]) => (
+                    <s-button
+                      key={px}
+                      variant={d.logoHeight === px ? "primary" : "secondary"}
+                      onClick={() => setD({ logoHeight: px })}
+                    >
+                      {label}
+                    </s-button>
+                  ))}
+                </div>
+                <s-number-field
+                  label="Maximum logo width (px)"
+                  details="Keeps wide logos from crowding the header (60–500 px)."
+                  min={60}
+                  max={500}
+                  step={10}
+                  value={String(d.logoMaxWidth)}
+                  onInput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    if (Number.isFinite(v)) setD({ logoMaxWidth: v });
+                  }}
+                />
                 <s-text-field
                   label="Title"
                   placeholder={
