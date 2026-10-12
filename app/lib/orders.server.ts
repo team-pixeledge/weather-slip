@@ -17,7 +17,7 @@ export interface GraphqlClient {
  * with null plus an error; the client library throws on that, but the rest
  * of the order is still good to show.
  */
-async function query<T>(
+export async function query<T>(
   admin: GraphqlClient,
   q: string,
   variables: Record<string, unknown>,

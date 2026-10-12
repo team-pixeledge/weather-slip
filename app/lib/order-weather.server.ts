@@ -19,6 +19,7 @@ import {
 } from "./snapshot";
 import { cachedForecast, cachedGeocode } from "./weather/cache.server";
 import type { GeoPoint, WeatherSnapshot } from "./weather/types";
+import { query } from "./orders.server";
 
 type AdminClient = Awaited<ReturnType<typeof unauthenticated.admin>>["admin"];
 
@@ -84,11 +85,11 @@ export function orderShippingDates(
   );
 }
 
-async function fetchOrder(admin: AdminClient, orderId: string): Promise<OrderData> {
-  const res = await admin.graphql(ORDER_QUERY, { variables: { id: orderGid(orderId) } });
-  const json = (await res.json()) as { data?: OrderData; errors?: unknown };
-  if (!json.data) throw new Error(`Order query failed: ${JSON.stringify(json.errors)}`);
-  return json.data;
+// Keeps partial data: until protected customer data (Address) is granted,
+// Shopify refuses latitude/longitude with an error but still returns the
+// city/zip/country, which the geocoder can use instead.
+function fetchOrder(admin: AdminClient, orderId: string): Promise<OrderData> {
+  return query<OrderData>(admin, ORDER_QUERY, { id: orderGid(orderId) });
 }
 
 async function writeMetafields(
