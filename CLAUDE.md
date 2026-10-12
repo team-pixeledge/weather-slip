@@ -92,6 +92,36 @@ PDF (no headless Chrome on Vercel).
   (introspection of `shopify.dev/admin-graphql-direct-proxy/2026-10`), but
   not yet run against a real store.
 
+## Slip templates (added 2026-10-12)
+
+Printing in the app is the main path; "Shopify templates" (`/app/snippets`,
+the Liquid snippet for Shopify's own slip/Order Printer/emails) is optional.
+`/app/slip` picks the shop's default template and options with a live
+preview (sample order from `slip-sample.ts`, rendered client-side in a
+sandboxed iframe by the same `renderPackingSlips` the print tab uses).
+- Templates (`slip.ts`): CLASSIC (cards), MINIMAL (ink saver, forecast
+  table, no images), DETAILED (prices, line totals, order totals — the only
+  template with money), LABEL_4X6 (`@page 4in 6in`, big ship-to, no bill-to
+  or store footer).
+- Options on `Shop.slip*`: paper A4/Letter (ignored for labels), images,
+  SKUs, bill-to, note, footer (null = default thank-you, "" = none, max 300).
+- The Orders page can override the template for one print (`?tpl=`).
+- Prices come from the order (currentSubtotal/Tax/Total, shipping); they
+  aren't protected customer data.
+
+## Plans & billing (added 2026-10-12)
+
+Billing API, not Shopify managed pricing: `shopify.server.ts` builds the
+`billing` config from `PLANS` (Starter $4.99, Pro $9.99, every 30 days; no
+trial). `/app/plans` shows usage + plan cards; upgrade = `billing.request`
+(Shopify approval screen, returns to `/app/plans` via
+admin.shopify.com/store/<handle>/apps/<api key>), Free = `billing.cancel`
+(prorated). `syncPlan` (`billing.server.ts`) reads
+`currentAppInstallation.activeSubscriptions` and writes `Shop.plan`; it runs
+on every Plans page load and on the `app_subscriptions/update` webhook.
+**Test charges until `SHOPIFY_BILLING_TEST=false`** is set in Vercel for
+launch; with it false, test subscriptions no longer unlock a plan.
+
 ## Weather providers
 
 `WeatherProvider` interface (`app/lib/weather/types.ts`); labels come from

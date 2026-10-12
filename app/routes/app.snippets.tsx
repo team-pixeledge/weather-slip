@@ -61,7 +61,18 @@ export default function Snippets() {
   };
 
   return (
-    <s-page heading="Invoice & slip setup">
+    <s-page heading="Shopify templates">
+      <s-banner tone="info">
+        Optional. The easiest way to print is right here in the app — from{" "}
+        <s-link href="/app/orders">Orders</s-link>, one slip or many, using
+        the templates in <s-link href="/app/slip">Packing slip</s-link>. Use
+        this page only if you&apos;d rather keep printing from Shopify&apos;s
+        own packing slip, Order Printer or order emails.
+      </s-banner>
+      <s-paragraph>
+        An order&apos;s weather is saved to it the first time you print its
+        slip from the app; these templates then show that saved weather.
+      </s-paragraph>
       <s-section heading="The snippet">
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
           <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>

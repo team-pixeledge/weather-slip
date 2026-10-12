@@ -181,6 +181,12 @@ const PRINT_QUERY = `#graphql
           name company address1 address2 city province zip country phone
         }
         fulfillments(first: 5) { createdAt estimatedDeliveryAt }
+        currencyCode
+        currentSubtotalPriceSet { shopMoney { amount } }
+        currentTotalDiscountsSet { shopMoney { amount } }
+        totalShippingPriceSet { shopMoney { amount } }
+        currentTotalTaxSet { shopMoney { amount } }
+        currentTotalPriceSet { shopMoney { amount } }
         lineItems(first: 100) {
           nodes {
             id
@@ -189,6 +195,7 @@ const PRINT_QUERY = `#graphql
             variantTitle
             quantity
             unfulfilledQuantity
+            originalUnitPriceSet { shopMoney { amount } }
             image { url(transform: { maxWidth: 160, maxHeight: 160 }) altText }
           }
         }
@@ -219,7 +226,12 @@ export interface PrintLineItem {
   variantTitle: string | null;
   quantity: number;
   unfulfilledQuantity: number;
+  originalUnitPriceSet?: Money;
   image: { url: string; altText: string | null } | null;
+}
+
+interface Money {
+  shopMoney: { amount: string };
 }
 
 export interface PrintOrder {
@@ -234,6 +246,13 @@ export interface PrintOrder {
   billingAddress: PrintAddress | null;
   fulfillments: { createdAt: string; estimatedDeliveryAt: string | null }[];
   lineItems: { nodes: PrintLineItem[] };
+  // Prices for the Detailed template (not customer data).
+  currencyCode?: string;
+  currentSubtotalPriceSet?: Money;
+  currentTotalDiscountsSet?: Money;
+  totalShippingPriceSet?: Money;
+  currentTotalTaxSet?: Money;
+  currentTotalPriceSet?: Money;
 }
 
 export interface PrintShop {

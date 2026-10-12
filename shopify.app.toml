@@ -42,6 +42,11 @@ api_version = "2026-10"
   topics = ["app/scopes_update"]
   uri = "/webhooks/app/scopes_update"
 
+  # Plan changes made outside the Plans page (cancelled, frozen, expired).
+  [[webhooks.subscriptions]]
+  topics = ["app_subscriptions/update"]
+  uri = "/webhooks/app/subscriptions_update"
+
   [[webhooks.subscriptions]]
   # No orders/create: weather is fetched only when a slip is printed.
   # orders/updated keeps printed orders' saved weather in step with

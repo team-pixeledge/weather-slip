@@ -6,6 +6,8 @@ import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { listOrders } from "../lib/orders.server";
 import { MAX_PRINT_ORDERS, ORDER_VIEWS, type OrderView } from "../lib/order-views";
+import { ensureShop } from "../lib/shop.server";
+import { isSlipTemplate, SLIP_TEMPLATES, type SlipTemplate } from "../lib/slip";
 import { signPrintToken } from "../lib/print-token.server";
 
 const WEATHER_LABEL: Record<string, string> = {
@@ -62,11 +64,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     rows: rows.map((r) => ({ ...r, weather: weather[r.id] ?? null })),
     pageInfo,
     printToken: signPrintToken(session.shop),
+    defaultTemplate: (await ensureShop(session.shop)).slipTemplate as SlipTemplate,
   };
 };
 
 export default function Orders() {
-  const { view, search, rows, pageInfo, printToken } = useLoaderData<typeof loader>();
+  const { view, search, rows, pageInfo, printToken, defaultTemplate } =
+    useLoaderData<typeof loader>();
+  // Template for this print; starts at the shop's saved default.
+  const [template, setTemplate] = useState<SlipTemplate>(defaultTemplate);
   const [, setParams] = useSearchParams();
   const navigation = useNavigation();
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
@@ -116,6 +122,7 @@ export default function Orders() {
     const u = new URL(`/print/${kind}`, window.location.origin);
     u.searchParams.set("t", printToken);
     u.searchParams.set("ids", ids.join(","));
+    if (kind === "slips" && template !== defaultTemplate) u.searchParams.set("tpl", template);
     window.open(u.toString(), "_blank", "noopener");
   };
   const selectedIds = [...selected.keys()];
@@ -175,6 +182,22 @@ export default function Orders() {
               value={query}
               onInput={(e) => onSearch(e.currentTarget.value)}
             />
+            <s-select
+              label="Slip template"
+              labelAccessibilityVisibility="exclusive"
+              value={template}
+              onChange={(e) => {
+                const v = e.currentTarget.value;
+                if (isSlipTemplate(v)) setTemplate(v);
+              }}
+            >
+              {SLIP_TEMPLATES.map((t) => (
+                <s-option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.id === defaultTemplate ? " (default)" : ""}
+                </s-option>
+              ))}
+            </s-select>
             <s-checkbox
               label="Select page"
               checked={allOnPage}
@@ -265,6 +288,10 @@ export default function Orders() {
       </s-section>
 
       <s-section slot="aside" heading="Printing">
+        <s-paragraph>
+          Choose the slip template next to the search box; change the default
+          and slip options in <s-link href="/app/slip">Packing slip</s-link>.
+        </s-paragraph>
         <s-paragraph>
           Packing slips open in a new tab with the destination&apos;s forecast
           for every day available (today plus the next few days), with the

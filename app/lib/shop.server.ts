@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { decrypt } from "./crypto.server";
 import type { DisplaySettings } from "./format";
 import { PLANS, USAGE_PERIOD_DAYS } from "./plans";
+import type { SlipOptions } from "./slip";
 import { OpenMeteoProvider } from "./weather/open-meteo.server";
 import { OpenWeatherProvider } from "./weather/openweather.server";
 import type { WeatherProvider } from "./weather/types";
@@ -16,6 +17,19 @@ export async function ensureShop(shop: string, timezone?: string | null): Promis
     create: { shop, ...(timezone ? { timezone } : {}) },
     update: { uninstalledAt: null, ...(timezone ? { timezone } : {}) },
   });
+}
+
+/** The shop's saved packing-slip settings. */
+export function slipOptions(shop: Shop): SlipOptions {
+  return {
+    template: shop.slipTemplate,
+    paper: shop.slipPaper,
+    showImages: shop.slipShowImages,
+    showSku: shop.slipShowSku,
+    showBilling: shop.slipShowBilling,
+    showNote: shop.slipShowNote,
+    footer: shop.slipFooter,
+  };
 }
 
 export function displaySettings(shop: Shop): DisplaySettings {

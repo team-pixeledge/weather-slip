@@ -6,7 +6,8 @@ import { MAX_PRINT_ORDERS } from "./order-views";
 import { ordersToPrint } from "./orders.server";
 import { verifyPrintToken } from "./print-token.server";
 import { drainQueue } from "./queue-runner.server";
-import { escapeHtml, renderCustomerList, renderPackingSlips } from "./slip";
+import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips } from "./slip";
+import { slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 
 // These pages carry customer names and addresses: never cache them, never
@@ -68,7 +69,12 @@ export async function printResponse(request: Request, kind: "slips" | "customers
     const weather = await weatherForSlips(shop, orders);
     // Orders that had no snapshot yet were queued; get them saved now.
     runInBackground(drainQueue({ budgetMs: 20_000 }));
-    html = renderPackingSlips(shopInfo, orders, weather, { unit: shop.unit, timeZone, nonce });
+    // The shop's saved slip settings; ?tpl= picks another template for
+    // this one print (from the Orders page).
+    const slip = slipOptions(shop);
+    const tpl = url.searchParams.get("tpl");
+    if (isSlipTemplate(tpl)) slip.template = tpl;
+    html = renderPackingSlips(shopInfo, orders, weather, { unit: shop.unit, timeZone, nonce, slip });
   }
   return new Response(html, { headers: securityHeaders(nonce) });
 }

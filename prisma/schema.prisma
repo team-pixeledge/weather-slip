@@ -38,6 +38,18 @@ enum Plan {
   PRO
 }
 
+enum SlipTemplate {
+  CLASSIC
+  MINIMAL
+  DETAILED
+  LABEL_4X6
+}
+
+enum PaperSize {
+  A4
+  LETTER
+}
+
 enum TemperatureUnit {
   C
   F
@@ -67,6 +79,15 @@ model Shop {
 
   // Merchant's own weather API key (Pro), AES-256-GCM encrypted — see crypto.server.ts.
   weatherApiKeyEnc String?
+
+  // Packing slip printed from the app (Packing slip page).
+  slipTemplate    SlipTemplate @default(CLASSIC)
+  slipPaper       PaperSize    @default(A4)
+  slipShowImages  Boolean      @default(true)
+  slipShowSku     Boolean      @default(true)
+  slipShowBilling Boolean      @default(true)
+  slipShowNote    Boolean      @default(true)
+  slipFooter      String? // null = default thank-you line, "" = none
 
   // Usage: orders that got a first snapshot in the current 30-day period.
   usagePeriodStart DateTime @default(now())
