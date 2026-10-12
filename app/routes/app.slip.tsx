@@ -254,14 +254,16 @@ export default function PackingSlip() {
                   ) : (
                     <s-text color="subdued">
                       No logo found. Weather Slip looks in Shopify{" "}
-                      <s-link href="shopify://admin/settings" target="_blank">
-                        Settings
-                      </s-link>{" "}
-                      → Brand, then your live theme&apos;s header logo (Online
-                      Store → Themes → Customize). Add one there and reopen this
-                      page — or choose &quot;A different logo (link)&quot;. If
-                      you just updated Weather Slip, approve its new permissions
-                      first.
+                      <s-link
+                        href="shopify://admin/settings/general/branding"
+                        target="_blank"
+                      >
+                        Settings → General → Brand
+                      </s-link>
+                      , then your live theme&apos;s header logo (Online Store →
+                      Themes → Customize). Add one there and reopen this page —
+                      or choose &quot;A different logo (link)&quot;. If you just
+                      updated Weather Slip, approve its new permissions first.
                     </s-text>
                   ))}
                 {d.logoSource === "custom" && (
