@@ -1,14 +1,19 @@
-# PRODUCTION app config. Fill client_id / application_url with
-# `shopify app config link` once the Partner Dashboard app exists, and add a
-# shopify.app.staging.toml (separate app + client_id) before launch — never
-# share one client_id between environments (store-performance-monitor did,
-# and `shopify app dev` overwrote its production URLs).
-name = "Weather Slip"
-client_id = ""
+# PRODUCTION app config (Partner app "Weather-Slip", linked 2026-10-12).
+# Add a shopify.app.staging.toml (separate app + client_id) before launch —
+# never share one client_id between environments (store-performance-monitor
+# did, and `shopify app dev` overwrote its production URLs).
+#
+# WARNING: `shopify app config link` rewrites this whole file from the
+# Partner Dashboard's current state — it dropped every webhook, the comments
+# and automatically_update_urls_on_dev=false the first time (2026-10-12).
+# After any link, `git diff` this file and restore before deploying.
+name = "Weather-Slip"
+client_id = "2f466274942e288153d61965b235f987"
 application_url = "https://example.com"
 embedded = true
 
 [build]
+include_config_on_deploy = true
 # Must stay false: true lets `shopify app dev` silently replace the
 # production application_url with a throwaway tunnel for as long as the dev
 # session runs. Flip locally if you need it, never commit it as true.
