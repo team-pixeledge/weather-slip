@@ -119,6 +119,19 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.
 
+## Printing from Shopify's own Orders section (added 2026-10-12)
+
+Two admin print action extensions (one target each, as Shopify requires):
+`extensions/weather-slip-print` (order page → Print) and
+`extensions/weather-slip-print-bulk` (Orders list selection → Print). Same
+JSX in both — keep them in step. They pick a document (packing slip /
+customer list) and template, and point `s-admin-print-action src` at the
+app's `/print/admin?kind&ids&tpl` (relative = app URL). That route uses
+`authenticate.admin` + `cors` (the admin sends a session token), renders
+with the same `renderPrint` as `/print/slips` but with no toolbar or
+auto-print, and allows the admin to frame it (`frame-ancestors`). Opening
+the preview counts an order's usage, same as printing from the app.
+
 ## Plans & billing (added 2026-10-12, reworked same day)
 
 `/app/plans` is also the app's overview (the Overview page was merged in;

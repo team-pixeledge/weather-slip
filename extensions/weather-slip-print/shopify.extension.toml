@@ -1,0 +1,19 @@
+api_version = "2026-07"
+
+[[extensions]]
+name = "Weather slip"
+handle = "weather-slip-print"
+type = "ui_extension"
+uid = "87562852-fa0a-b310-20d2-09e5f9a3a184248aa50a"
+
+# Only 1 target can be specified for each admin print action extension
+[[extensions.targeting]]
+module = "./src/PrintActionExtension.jsx"
+target = "admin.order-details.print-action.render"
+
+# Valid extension targets:
+
+# - admin.order-details.print-action.render
+# - admin.order-index.selection-print-action.render
+# - admin.product-details.print-action.render
+# - admin.product-index.selection-print-action.render

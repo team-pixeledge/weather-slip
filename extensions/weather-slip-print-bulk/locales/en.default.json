@@ -1,0 +1,14 @@
+{
+  "document": "Document",
+  "slips": "Packing slip with weather",
+  "customers": "Customer list",
+  "template": "Template",
+  "defaultTemplate": "Default (from Packing slip settings)",
+  "classic": "Classic",
+  "minimal": "Minimal",
+  "detailed": "Detailed (with prices)",
+  "label": "4×6 label",
+  "tooManyTitle": "Too many orders selected",
+  "tooManyBody": "Only the first {{max}} orders are printed. Select fewer to print the rest.",
+  "usage": "An order counts toward your Weather Slip plan the first time it's printed with weather. Reprints are free."
+}
