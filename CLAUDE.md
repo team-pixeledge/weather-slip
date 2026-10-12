@@ -222,11 +222,8 @@ the provider. `WEATHER_PROVIDER` picks one:
   (and whether a `$app` namespace would also work — decide before launch,
   changing it later breaks every merchant's pasted snippet). Also check how
   often `shippingAddress.latitude/longitude` is populated.
-- Billing API wiring (plans are enforced from `Shop.plan`, which nothing
-  sets yet besides the default FREE), print action extension (would put
-  "Weather slip" in Shopify's own Orders → Print menu; the in-app Orders
-  page covers printing until then), order-details
-  admin block, Pro backfill, heat/cold tags.
+- Order-details admin block, Pro backfill, heat/cold tags. (Billing and
+  the print action extensions are built — see their sections above.)
 - Partner app "Weather-Slip" (org ThePixelEdge): protected customer data
   declared 2026-10-12 (Store management + App functionality; Name, Phone,
   Address — not Email), and `shopify app deploy --config shopify.app.toml
