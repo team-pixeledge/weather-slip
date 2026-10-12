@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { listOrders } from "../lib/orders.server";
 import {
@@ -22,14 +21,6 @@ import { signPrintToken } from "../lib/print-token.server";
 // Laid out like Shopify's own Orders page (same tabs, columns and badges)
 // so merchants already know how to read it; printing is a bulk action on
 // the selection, like Shopify's.
-
-const WEATHER_LABEL: Record<string, string> = {
-  OK: "Saved",
-  PENDING_DATES: "Pending",
-  NO_LOCATION: "No address",
-  LIMIT_REACHED: "Plan limit",
-  FAILED: "Failed",
-};
 
 type Tone = "caution" | "warning" | "neutral" | "info";
 
@@ -95,14 +86,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pageSize: perPage,
   });
 
-  const snaps = rows.length
-    ? await prisma.$queryRaw<{ orderId: string; status: string }[]>`
-        SELECT DISTINCT ON ("orderId") "orderId", status
-          FROM "OrderWeatherSnapshot"
-         WHERE shop = ${session.shop} AND "orderId" = ANY(${rows.map((r) => r.id)})
-         ORDER BY "orderId", version DESC`
-    : [];
-  const weather = Object.fromEntries(snaps.map((s) => [s.orderId, s.status]));
 
   return {
     view,
@@ -110,7 +93,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     range,
     perPage,
     loadedAt: new Date().toISOString(),
-    rows: rows.map((r) => ({ ...r, weather: weather[r.id] ?? null })),
+    rows,
     pageInfo,
     printToken: signPrintToken(session.shop),
     // Without read_all_orders Shopify only returns the last 60 days.
@@ -376,7 +359,7 @@ export default function Orders() {
             <s-table-header listSlot="labeled">Fulfillment status</s-table-header>
             <s-table-header>Items</s-table-header>
             <s-table-header>Delivery method</s-table-header>
-            <s-table-header>Weather</s-table-header>
+            <s-table-header>Packing slip</s-table-header>
             <s-table-header>Tags</s-table-header>
           </s-table-header-row>
           <s-table-body>
@@ -421,23 +404,11 @@ export default function Orders() {
                   </s-table-cell>
                   <s-table-cell>{r.shippingMethod ?? ""}</s-table-cell>
                   <s-table-cell>
-                    {r.weather ? (
-                      <s-badge
-                        tone={
-                          r.weather === "OK"
-                            ? "success"
-                            : r.weather === "PENDING_DATES"
-                              ? "info"
-                              : "warning"
-                        }
-                      >
-                        {WEATHER_LABEL[r.weather] ?? r.weather}
-                      </s-badge>
-                    ) : (
-                      <s-button icon="print" onClick={() => openPrint("slips", [r.id])}>
-                        Print slip
-                      </s-button>
-                    )}
+                    {/* Always a print action; a reprint reuses the forecast
+                        saved on the order, so it costs nothing. */}
+                    <s-button icon="print" onClick={() => openPrint("slips", [r.id])}>
+                      Print slip
+                    </s-button>
                   </s-table-cell>
                   <s-table-cell>{r.tags.join(", ")}</s-table-cell>
                 </s-table-row>

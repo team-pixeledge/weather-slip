@@ -12,7 +12,13 @@ export function sampleSlipData(today: string, shopName: string) {
     contactEmail: "hello@your-store.example",
     ianaTimezone: "UTC",
     primaryDomain: { host: "your-store.example" },
-    shopAddress: { address1: "12 Market Street", city: "Austin", province: "TX", zip: "78701", country: "United States" },
+    shopAddress: {
+      address1: "12 Market Street",
+      city: "Austin",
+      province: "TX",
+      zip: "78701",
+      country: "United States",
+    },
   };
   const order: PrintOrder = {
     id: "gid://shopify/Order/1",
@@ -44,6 +50,7 @@ export function sampleSlipData(today: string, shopName: string) {
       country: "United States",
     },
     fulfillments: [],
+    customAttributes: [{ key: "Gift message", value: "Happy birthday, Sam!" }],
     currencyCode: "USD",
     currentSubtotalPriceSet: { shopMoney: { amount: "84.00" } },
     currentTotalDiscountsSet: { shopMoney: { amount: "0" } },
@@ -54,7 +61,14 @@ export function sampleSlipData(today: string, shopName: string) {
       nodes: [
         {
           id: "1",
-          name: "Live plant — Monstera (large)",
+          name: "Live plant — Monstera deliciosa in a hand-thrown ceramic pot - Large",
+          title: "Live plant — Monstera deliciosa in a hand-thrown ceramic pot",
+          vendor: "Green Leaf Nursery",
+          customAttributes: [{ key: "Gift wrap", value: "Yes" }],
+          variant: {
+            compareAtPrice: "64.00",
+            barcodes: { nodes: [{ value: "0123456789012" }] },
+          },
           sku: "PLT-MON-L",
           variantTitle: "Large",
           quantity: 1,
@@ -65,6 +79,8 @@ export function sampleSlipData(today: string, shopName: string) {
         {
           id: "2",
           name: "Organic potting mix 5L",
+          title: "Organic potting mix 5L",
+          vendor: "Green Leaf Nursery",
           sku: "SOIL-5",
           variantTitle: null,
           quantity: 2,
@@ -75,7 +91,13 @@ export function sampleSlipData(today: string, shopName: string) {
       ],
     },
   };
-  const labels = ["Clear sky", "Few clouds", "Light rain", "Moderate rain", "Overcast clouds"];
+  const labels = [
+    "Clear sky",
+    "Few clouds",
+    "Light rain",
+    "Moderate rain",
+    "Overcast clouds",
+  ];
   const weather: SlipWeather = {
     status: "ok",
     city: "Denver",

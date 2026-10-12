@@ -145,3 +145,40 @@ describe("logo source", () => {
     expect(resolveLogo(sanitizeDesign({}), "https://evil.example/x.png").logoUrl).toBeNull();
   });
 });
+
+describe("line items", () => {
+  const withDesign = (design: Partial<import("../app/lib/slip").SlipDesign>, rest: Partial<SlipOptions> = {}) =>
+    render({ ...rest, design: { ...DEFAULT_SLIP_OPTIONS.design, ...design } });
+
+  it("shortens long titles and puts the variant on its own line", () => {
+    const html = withDesign({ titleMax: 30 });
+    expect(html).toContain("Live plant — Monstera delicio…");
+    expect(html).not.toContain("hand-thrown");
+    expect(html).toContain('<div class="muted">Large</div>');
+  });
+
+  it("shows vendor, barcode, properties and cart attributes when on", () => {
+    const html = withDesign({ showVendor: true, showBarcode: true });
+    expect(html).toContain("Vendor: Green Leaf Nursery");
+    expect(html).toContain("Barcode: 0123456789012");
+    expect(html).toContain("Gift wrap: Yes");
+    expect(html).toContain("Happy birthday, Sam!");
+    const off = withDesign({ showProperties: false, showCartAttributes: false });
+    expect(off).not.toContain("Gift wrap");
+    expect(off).not.toContain("Happy birthday");
+  });
+
+  it("prices on any template, compare-at struck through, totals optional", () => {
+    const html = withDesign({ showPrices: true, showTotals: true });
+    expect(html).toContain('<s class="was">$64.00</s> $54.00');
+    expect(html).toContain("$100.22");
+    expect(withDesign({ showPrices: true, showCompareAt: false })).not.toContain('class="was"');
+    expect(render({})).not.toContain("$54.00");
+  });
+
+  it("quantity format and sorting", () => {
+    expect(withDesign({ qtyFormat: "plain" })).toMatch(/class="qty">2</);
+    const byName = withDesign({ itemSort: "name" });
+    expect(byName.indexOf("Live plant")).toBeLessThan(byName.indexOf("Organic"));
+  });
+});

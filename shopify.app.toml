@@ -33,7 +33,9 @@ automatically_update_urls_on_dev = false
 # unauthenticated_read_content: lets the app create its own Storefront
 #   token to read the store logo (Settings → Brand) for packing slips — the
 #   Admin API doesn't expose it. No customer data.
-scopes = "read_orders,write_orders,unauthenticated_read_content"
+# read_products: compare-at price and barcode on packing slips (they live
+#   on the product variant). No customer data.
+scopes = "read_orders,write_orders,unauthenticated_read_content,read_products"
 
 [auth]
 redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]

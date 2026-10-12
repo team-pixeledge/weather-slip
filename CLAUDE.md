@@ -131,6 +131,14 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   fonts under the CSP), five text sizes, label 4×6 or 4×4. Customer email
   prints only once Email is granted in protected customer data.
 - `/app/slip`: template row, settings column + sticky live preview.
+- **Line items** (design fields): image size, title shortening (30/50/80),
+  variant line, SKU, vendor, barcode, item properties (keys starting "_"
+  hidden, as at checkout), prices + struck "was" price (compare-at or
+  pre-discount, whichever is higher), totals, quantity "1 of 2" or plain,
+  unfulfilled-only or all items, sort by order/name/SKU, cart attributes.
+  Compare-at and barcode come from `lineItem.variant`, which needs
+  `read_products` (granted with the 2026-10-12 release); the print query
+  keeps partial data if it's missing.
 - **Store logo** (`brand-logo.server.ts`): `logoSource` store (default) /
   custom link / none. The Admin API has no brand logo, so the app creates
   its own Storefront token (`storefrontAccessTokenCreate`, needs the
