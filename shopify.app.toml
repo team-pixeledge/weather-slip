@@ -26,10 +26,11 @@ automatically_update_urls_on_dev = false
 # write_orders: metafieldsSet on Order needs it.
 # Shopify grants what's listed here, not what auth.begin asks for — a scope
 # change does nothing until `shopify app deploy` pushes this file.
-# read_all_orders: the Orders page lists orders of any age (without it
-#   Shopify only returns the last 60 days). Needs approval in the Partner
-#   Dashboard (API access requests → Read all orders).
-scopes = "read_orders,write_orders,read_all_orders"
+# read_all_orders (NOT YET ADDED): lets the Orders page list orders older
+#   than 60 days. Shopify rejects a deploy with it until access is approved
+#   in the Partner Dashboard (API access requests → Read all orders). Once
+#   approved: add it here, deploy, then add it to Vercel's SCOPES env.
+scopes = "read_orders,write_orders"
 
 [auth]
 redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]
