@@ -9,7 +9,7 @@
 # After any link, `git diff` this file and restore before deploying.
 name = "Weather-Slip"
 client_id = "2f466274942e288153d61965b235f987"
-application_url = "https://example.com"
+application_url = "https://weather-slip.vercel.app"
 embedded = true
 
 [build]
@@ -29,7 +29,7 @@ automatically_update_urls_on_dev = false
 scopes = "read_orders,write_orders"
 
 [auth]
-redirect_urls = ["https://example.com/auth/callback"]
+redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]
 
 [webhooks]
 api_version = "2026-10"

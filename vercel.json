@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "react-router",
   "buildCommand": "prisma generate && prisma migrate deploy && react-router build",
-  "crons": [{ "path": "/api/cron/drain", "schedule": "0 3 * * *" }]
+  "crons": [
+    {
+      "path": "/api/cron/drain",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }
