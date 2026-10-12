@@ -9,6 +9,8 @@ import { ensureShop } from "../lib/shop.server";
 
 const field = `order.metafields.${METAFIELD_NAMESPACE}.${METAFIELD_SUMMARY_KEY}`;
 
+// No order-confirmation email target: weather is saved on an order when its
+// slip is first printed in the app, long after that email goes out.
 // The same one-line snippet works in each of these because they all expose
 // order metafields to Liquid. Kept to the plain summary text: it's the
 // lowest common denominator every renderer handles.
@@ -23,7 +25,8 @@ const TARGETS = [
     id: "packing-slip",
     title: "Shopify packing slip",
     paid: false,
-    steps: "Settings → Shipping and delivery → Packing slips → Edit. Paste below the shipping address block and save.",
+    steps:
+      "Settings → Shipping and delivery → Packing slips → Edit. Paste below the shipping address block and save. To check it, print a real order's packing slip — the editor's preview uses a sample order with no weather.",
   },
   {
     id: "order-printer",
@@ -36,12 +39,6 @@ const TARGETS = [
     title: "Order Printer Pro",
     paid: true,
     steps: "Templates → your invoice or packing slip → Edit code. Paste and save.",
-  },
-  {
-    id: "email",
-    title: "Order confirmation email",
-    paid: true,
-    steps: "Settings → Notifications → Order confirmation → Edit code. Weather is usually ready a few seconds after the order, so it may be missing from emails sent instantly.",
   },
 ];
 
