@@ -148,6 +148,11 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   ("Online Store channel is locked"). Cached in `Shop.brandLogoUrl`;
   refreshed on every Packing slip visit and at most daily when printing;
   `resolveLogo` picks what prints. Failures keep the last known logo.
+  Fallback when Brand has no logo (most stores set it in the theme): the
+  MAIN theme's `config/settings_data.json` (read_themes; strip Shopify's
+  leading /* */ comment; `current` may be a preset name) → first
+  `shopify://shop_images/<file>` under a logo key (`findThemeLogoRef`) →
+  Files API `filename:` lookup (read_files) → CDN URL.
 - The Orders page can override the template for one print (`?tpl=`).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.

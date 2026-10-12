@@ -208,3 +208,24 @@ describe("logo size", () => {
     expect(render({ template: "LABEL_4X6", design: d })).toContain("max-height:40px");
   });
 });
+
+describe("theme logo lookup", () => {
+  it("finds the header logo in settings_data.json (with Shopify's comment header)", async () => {
+    const { findThemeLogoRef } = await import("../app/lib/brand-logo.server");
+    const json = `/*\n * auto-generated\n */\n${JSON.stringify({
+      current: {
+        sections: {
+          header: { settings: { logo: "shopify://shop_images/acme-logo.png", logo_width: 120 } },
+          footer: { settings: { footer_logo: "shopify://shop_images/small.png" } },
+        },
+      },
+    })}`;
+    expect(findThemeLogoRef(json)).toBe("shopify://shop_images/acme-logo.png");
+  });
+  it("follows a preset name in current", async () => {
+    const { findThemeLogoRef } = await import("../app/lib/brand-logo.server");
+    const json = JSON.stringify({ current: "Default", presets: { Default: { logo: "shopify://shop_images/p.png" } } });
+    expect(findThemeLogoRef(json)).toBe("shopify://shop_images/p.png");
+    expect(findThemeLogoRef("{}")).toBeNull();
+  });
+});

@@ -35,7 +35,9 @@ automatically_update_urls_on_dev = false
 #   Admin API doesn't expose it. No customer data.
 # read_products: compare-at price and barcode on packing slips (they live
 #   on the product variant). No customer data.
-scopes = "read_orders,write_orders,unauthenticated_read_content,read_products"
+# read_themes + read_files: fall back to the theme's header logo when
+#   Settings → Brand has none (theme settings → shop_images file → CDN URL).
+scopes = "read_orders,write_orders,unauthenticated_read_content,read_products,read_themes,read_files"
 
 [auth]
 redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]
