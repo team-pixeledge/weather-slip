@@ -13,7 +13,6 @@ application_url = "https://weather-slip.vercel.app"
 embedded = true
 
 [build]
-include_config_on_deploy = true
 # Must stay false: true lets `shopify app dev` silently replace the
 # production application_url with a throwaway tunnel for as long as the dev
 # session runs. Flip locally if you need it, never commit it as true.

@@ -90,7 +90,16 @@ the provider. `WEATHER_PROVIDER` picks one:
   AWS move: run the Docker image (App Runner/ECS) + `npm run worker`
   (`scripts/worker.ts`) or a scheduled Lambda calling `drainQueue`, and
   swap `runInBackground` — no queue/data changes needed.
-- DB: Neon via the Vercel Marketplace. `DATABASE_URL` = pooled host,
+- **Live**: https://weather-slip.vercel.app (Vercel project `weather-slip`,
+  team `test11-fc37`, Git-connected to team-pixeledge/weather-slip `main`).
+  Verified 2026-10-12: pages 200, cron 401 without secret / drains with it,
+  webhooks 401 on a forged HMAC (what app review checks).
+- Vercel gotchas hit on first deploy: a CLI-created project has no
+  framework → static-only output, every route 404 — `vercel.json` pins
+  `"framework": "react-router"`. A raw `buildCommand` runs without
+  `node_modules/.bin` on PATH (exit 127) — build via `npm run vercel-build`.
+- DB: Neon via the Vercel Marketplace (free plan, iad1, resource
+  `weather-slip-db`). `DATABASE_URL` = pooled host,
   `DATABASE_URL_UNPOOLED` = direct (migrate) — names the integration sets.
   `vercel.json` buildCommand runs `prisma migrate deploy` on every build.
 
@@ -104,9 +113,12 @@ the provider. `WEATHER_PROVIDER` picks one:
 - Billing API wiring (plans are enforced from `Shop.plan`, which nothing
   sets yet besides the default FREE), print action extension, order-details
   admin block, Pro backfill, heat/cold tags.
-- Partner Dashboard app not created: `client_id`/`application_url` in
-  `shopify.app.toml` are placeholders; add a separate staging app/toml.
-  Protected customer data (shipping address only) must be requested there.
+- Partner app "Weather-Slip" (org ThePixelEdge) is linked, but **`shopify
+  app deploy` is blocked** until protected customer data access is
+  declared in the Partner Dashboard (orders webhooks carry PCD). Request
+  only what we use: Level 1 + the address field. Then rerun
+  `shopify app deploy --config shopify.app.toml --allow-updates`.
+  Still needed: a separate staging app/toml.
 - `shop.ianaTimezone` is captured on install and refreshed per job.
 
 ## Verify
