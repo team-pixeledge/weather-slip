@@ -21,9 +21,11 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <img className={styles.logo} src="/icon-512.png" alt="" width={96} height={96} />
+        <h1 className={styles.heading}>Weather Slip</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Packing slips with the destination&apos;s weather forecast, so every
+          parcel is packed for the weather it will travel in.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -39,16 +41,16 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Print in bulk</strong>. Select unfulfilled orders and print
+            their packing slips, or a customer list, in one go.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Forecast on every slip</strong>. Each day&apos;s forecast
+            at the destination, with dispatch and delivery days marked.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Pay per order printed</strong>. Plans count orders you
+            print with weather, once each. Reprints are free.
           </li>
         </ul>
       </div>

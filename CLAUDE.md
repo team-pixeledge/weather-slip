@@ -173,6 +173,15 @@ the provider. `WEATHER_PROVIDER` picks one:
   Still needed: a separate staging app/toml.
 - `shop.ianaTimezone` is captured on install and refreshed per job.
 
+## Brand
+
+`brand/icon.svg` is the app icon source (slip + forecast strip + sun and
+cloud); `brand/icon-small.svg` is a simplified mark for favicons, because
+the full icon is unreadable at 16–32px. `brand/export.sh` regenerates
+`brand/icon-1200.png` (upload this in the Partner Dashboard — the CLI can't
+set the app icon, and it's what the admin nav shows) and the `public/`
+favicon/apple-touch/512 files.
+
 ## Verify
 
 ```bash

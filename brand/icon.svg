@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200">
+  <!-- Weather Slip app icon: a packing slip with a forecast strip, sun and
+       cloud at the corner. Source for icon-1200.png (Partner Dashboard) and
+       public/ favicons — re-export with brand/export.sh after editing. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3FA0F7"/>
+      <stop offset="1" stop-color="#1452A8"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD84D"/>
+      <stop offset="1" stop-color="#FFA21A"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0A2A5C" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#sky)"/>
+
+  <g transform="translate(-70 45)">
+
+  <!-- packing slip with folded corner -->
+  <g filter="url(#shadow)">
+    <path d="M290 250 H730 L890 410 V910 a44 44 0 0 1 -44 44 H334 a44 44 0 0 1 -44 -44 V294 a44 44 0 0 1 44 -44 Z" fill="#FFFFFF"/>
+  </g>
+  <path d="M730 250 V366 a44 44 0 0 0 44 44 H890 Z" fill="#CFE2FA"/>
+
+  <!-- header lines -->
+  <rect x="360" y="350" width="260" height="36" rx="18" fill="#C7DAF1"/>
+  <rect x="360" y="426" width="180" height="36" rx="18" fill="#C7DAF1"/>
+
+  <!-- forecast strip: three days, today highlighted -->
+  <rect x="360" y="540" width="140" height="180" rx="24" fill="#EAF3FE"/>
+  <rect x="520" y="540" width="140" height="180" rx="24" fill="#1F6FDB"/>
+  <rect x="680" y="540" width="140" height="180" rx="24" fill="#EAF3FE"/>
+  <circle cx="430" cy="604" r="28" fill="#FFB12A"/>
+  <circle cx="590" cy="604" r="28" fill="#FFFFFF"/>
+  <circle cx="750" cy="604" r="28" fill="#9BC1F1"/>
+  <rect x="395" y="662" width="70" height="24" rx="12" fill="#9BC1F1"/>
+  <rect x="555" y="662" width="70" height="24" rx="12" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="715" y="662" width="70" height="24" rx="12" fill="#9BC1F1"/>
+
+  <!-- footer lines -->
+  <rect x="360" y="790" width="460" height="36" rx="18" fill="#C7DAF1"/>
+  <rect x="360" y="862" width="300" height="36" rx="18" fill="#C7DAF1"/>
+
+  <!-- sun, partly behind a cloud, over the slip's folded corner -->
+  <g transform="translate(880 270)" filter="url(#shadow)">
+    <g stroke="#FFC233" stroke-width="28" stroke-linecap="round">
+      <line x1="0" y1="-178" x2="0" y2="-140"/>
+      <line x1="126" y1="-126" x2="99" y2="-99"/>
+      <line x1="178" y1="0" x2="140" y2="0"/>
+      <line x1="126" y1="126" x2="99" y2="99"/>
+      <line x1="-126" y1="-126" x2="-99" y2="-99"/>
+      <line x1="-178" y1="0" x2="-140" y2="0"/>
+    </g>
+    <circle r="108" fill="url(#sun)"/>
+  </g>
+  <g transform="translate(640 300) scale(0.78)" filter="url(#shadow)">
+    <path d="M70 250 a80 80 0 0 1 10 -159 a112 112 0 0 1 212 -22 a92 92 0 0 1 36 181 Z" fill="#FFFFFF"/>
+  </g>
+  </g>
+</svg>

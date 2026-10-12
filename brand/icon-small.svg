@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Simplified Weather Slip mark for favicons (≤64px): slip + sun only. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3FA0F7"/><stop offset="1" stop-color="#1452A8"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#sky)"/>
+  <rect x="14" y="16" width="30" height="38" rx="4" fill="#FFFFFF"/>
+  <rect x="19" y="24" width="14" height="4" rx="2" fill="#9BC1F1"/>
+  <rect x="19" y="33" width="20" height="10" rx="3" fill="#1F6FDB"/>
+  <rect x="19" y="46" width="16" height="4" rx="2" fill="#9BC1F1"/>
+  <circle cx="46" cy="17" r="10" fill="#FFB12A" stroke="#1E63C4" stroke-width="2.5"/>
+</svg>
