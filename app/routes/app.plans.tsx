@@ -144,13 +144,17 @@ export default function Plans() {
   const rank = (id: PlanId) => PLAN_ORDER.indexOf(id);
 
   return (
-    <s-page
-      heading="Plans & pricing"
-      {...untyped({
-        subheading:
-          "Start free, or pick a paid plan. Plans count orders printed with weather — reprints are free. Change or cancel anytime.",
-      })}
-    >
+    <s-page heading="Plans & pricing">
+      {/* In-page title + subtitle: s-page only puts its heading in the admin
+          title bar, and the reference design has it on the page. */}
+      <div style={{ margin: "4px 0 4px" }}>
+        <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.3 }}>Plan</div>
+        <s-text color="subdued">
+          Start free, or pick a paid plan. Plans count orders printed with weather — reprints
+          are free. Change or cancel your plan here anytime.
+        </s-text>
+      </div>
+
       {/* ---- current plan + usage (was the Overview page) ---- */}
       <s-section>
         <s-stack direction="block" gap="small-300">
@@ -200,6 +204,12 @@ export default function Plans() {
               {d.failedJobs} order(s) couldn&apos;t save weather after several retries.
             </s-text>
           )}
+          {d.testCharge && (
+            <s-text color="subdued">
+              Test mode: plan changes go through Shopify&apos;s approval screen, but no money is
+              charged.
+            </s-text>
+          )}
         </s-stack>
       </s-section>
 
@@ -220,16 +230,19 @@ export default function Plans() {
           {result.error}
         </s-banner>
       )}
-      {d.testCharge && (
-        <s-banner tone="info">
-          Test mode: plan changes go through Shopify&apos;s approval screen, but no money is
-          charged.
-        </s-banner>
-      )}
 
       {/* ---- plan cards ---- */}
-      <s-section heading="All plans">
-        <s-grid gridTemplateColumns="@container (inline-size > 720px) 1fr 1fr 1fr, 1fr" gap="base">
+      <div style={{ fontSize: 15, fontWeight: 650, margin: "8px 0 0" }}>All plans</div>
+      {/* Plain CSS grid: one row of cards on desktop, wrapping on narrow
+          screens; cards sit on the page background like the App Store. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+          gap: 16,
+          alignItems: "stretch",
+        }}
+      >
           {d.plans.map((p) => {
             const isActive = p.id === d.current;
             const isFree = p.priceUsd === 0;
@@ -264,7 +277,7 @@ export default function Plans() {
                 }}
               >
                 <s-stack direction="inline" gap="small-200" alignItems="center" justifyContent="space-between">
-                  <s-heading>{p.name}</s-heading>
+                  <span style={{ fontSize: 20, fontWeight: 700 }}>{p.name}</span>
                   {isActive ? (
                     <s-badge tone="success">Current plan</s-badge>
                   ) : p.highlight ? (
@@ -330,8 +343,7 @@ export default function Plans() {
               </div>
             );
           })}
-        </s-grid>
-      </s-section>
+      </div>
 
       {/* ---- full comparison ---- */}
       <s-section>
