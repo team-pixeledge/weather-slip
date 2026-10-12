@@ -213,6 +213,7 @@ const PRINT_QUERY = `#graphql
         }
         fulfillments(first: 5) { createdAt estimatedDeliveryAt }
         savedForecast: metafield(namespace: "weather_slip", key: "forecast") { value }
+        customAttributes { key value }
         currencyCode
         currentSubtotalPriceSet { shopMoney { amount } }
         currentTotalDiscountsSet { shopMoney { amount } }
@@ -227,7 +228,14 @@ const PRINT_QUERY = `#graphql
             variantTitle
             quantity
             unfulfilledQuantity
+            title
+            vendor
+            customAttributes { key value }
             originalUnitPriceSet { shopMoney { amount } }
+            discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } }
+            # variant needs read_products; until it's granted Shopify returns
+            # it null with an error and the rest of the order still prints.
+            variant { compareAtPrice barcodes(first: 1) { nodes { value } } }
             image { url(transform: { maxWidth: 160, maxHeight: 160 }) altText }
           }
         }
@@ -258,7 +266,14 @@ export interface PrintLineItem {
   variantTitle: string | null;
   quantity: number;
   unfulfilledQuantity: number;
+  /** Product title without the variant (name = "Title - Variant"). */
+  title?: string;
+  vendor?: string | null;
+  /** Line item properties, e.g. engraving text. */
+  customAttributes?: { key: string; value: string | null }[];
   originalUnitPriceSet?: Money;
+  discountedUnitPriceAfterAllDiscountsSet?: Money;
+  variant?: { compareAtPrice: string | null; barcodes?: { nodes: { value: string }[] } } | null;
   image: { url: string; altText: string | null } | null;
 }
 
@@ -283,6 +298,8 @@ export interface PrintOrder {
   lineItems: { nodes: PrintLineItem[] };
   /** weather_slip.forecast: the slip forecast saved at the first print. */
   savedForecast?: { value: string } | null;
+  /** Cart attributes (e.g. gift message, delivery instructions). */
+  customAttributes?: { key: string; value: string | null }[];
   // Prices for the Detailed template (not customer data).
   currencyCode?: string;
   currentSubtotalPriceSet?: Money;
