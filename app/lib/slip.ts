@@ -4,6 +4,7 @@
 // it's unit-tested directly.
 import { addDays, shortDay, type IsoDate } from "./dates";
 import { cToF, type Unit } from "./format";
+import { weatherIcon } from "./weather-icons";
 import type { PrintAddress, PrintOrder, PrintShop } from "./orders.server";
 import type { ForecastPayload } from "./weather/types";
 
@@ -220,6 +221,7 @@ function weatherCards(w: SlipWeather | undefined, unit: Unit, timeZone: string):
         <div class="day${tags.length ? " key" : ""}">
           <div class="d">${escapeHtml(shortDay(d.date))}</div>
           ${tags.length ? `<div class="tag">${escapeHtml(tags.join(" · "))}</div>` : ""}
+          <div class="icon">${weatherIcon(d.label, 34)}</div>
           <div class="cond">${escapeHtml(d.label)}</div>
           <div class="t">${escapeHtml(temp(d.maxC, unit))}</div>
           <div class="t lo">${escapeHtml(temp(d.minC, unit))}</div>
@@ -231,7 +233,7 @@ function weatherCards(w: SlipWeather | undefined, unit: Unit, timeZone: string):
     <section class="weather">
       ${dates}
       <h3>Weather forecast — ${escapeHtml(placeText(w) || "destination")}</h3>
-      ${w.current ? `<p class="now">Now: ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(w.current.label)}</p>` : ""}
+      ${w.current ? `<p class="now">${weatherIcon(w.current.label, 18)} Now: ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(w.current.label)}</p>` : ""}
       <div class="days">${boxes || `<p class="muted">No forecast days available.</p>`}</div>
       ${forecastNotes(w).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
       <p class="asof">Forecast as of ${escapeHtml(asOfText(w.asOf, timeZone))}</p>
@@ -253,7 +255,7 @@ function weatherTable(w: SlipWeather | undefined, unit: Unit, timeZone: string, 
       const rain = d.precipProb != null && d.precipProb >= 20 ? `${d.precipProb}%` : "";
       return `<tr${tags.length ? ' class="key"' : ""}>
         <td>${escapeHtml(shortDay(d.date))}${tags.length ? ` <span class="tag">${escapeHtml(tags.join("/"))}</span>` : ""}</td>
-        <td>${escapeHtml(d.label)}</td>
+        <td class="wxcell">${weatherIcon(d.label, compact ? 14 : 16)} ${escapeHtml(d.label)}</td>
         <td class="num">${escapeHtml(temp(d.maxC, unit))}</td>
         <td class="num">${escapeHtml(temp(d.minC, unit))}</td>
         <td class="num">${rain}</td>
@@ -457,7 +459,12 @@ const BASE_STYLES = `
   .day.key { border: 2px solid #111; }
   .day .d { font-weight: 600; }
   .day .tag, .fc .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .day .icon { margin: 4px 0 0; line-height: 0; }
   .day .cond { color: #444; margin: 2px 0; }
+  svg.wx { display: inline-block; vertical-align: middle; }
+  .now svg.wx { margin: -3px 2px 0 0; }
+  td.wxcell { white-space: nowrap; }
+  td.wxcell svg.wx { margin: -2px 3px 0 0; }
   .day .lo, .day .rain { color: #555; font-size: 11px; }
   table.fc { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
   table.fc th { text-align: left; font-size: 10px; border-bottom: 1px solid #111; padding: 2px 4px; }

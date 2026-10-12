@@ -58,28 +58,31 @@ export function planFromBillingName(name: string): PlanId | null {
   return PAID_PLANS.find((id) => PLANS[id].name === name) ?? null;
 }
 
-/** Short list for each plan card ("Everything in X, plus" style). */
+/**
+ * Each plan card's list, App Store style: the plan's own limits first, then
+ * "Everything in <lower plan>, plus:" and what it adds. A line starting
+ * "Everything in" renders as a subheading, not a ✓ item.
+ */
 export function planFeatures(id: PlanId): string[] {
-  const p = PLANS[id];
-  const orders = `${p.ordersPerPeriod.toLocaleString("en-US")} orders a month printed with weather`;
+  const orders = `${PLANS[id].ordersPerPeriod.toLocaleString("en-US")} orders a month printed with weather`;
   if (id === "FREE") {
     return [
       orders,
-      "Print one slip or many, plus a customer list",
+      "Print one slip or many",
       "All 4 slip templates",
-      "Destination forecast for every day",
-      "Reprints are always free",
+      "Forecast for every day to delivery",
+      "Reprints always free",
     ];
   }
   if (id === "STARTER") {
     return [
-      "Everything in Free, plus",
       orders,
+      "Everything in Free, plus:",
       "Dispatch-day forecast in saved weather",
       "Weather on Shopify's packing slip, Order Printer and emails",
     ];
   }
-  return ["Everything in Starter, plus", orders, "Use your own OpenWeather API key"];
+  return [orders, "Everything in Starter, plus:", "Use your own OpenWeather API key"];
 }
 
 /** Rows for the "Compare all features" table: label, then one cell per plan. */

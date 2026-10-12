@@ -86,6 +86,9 @@ const LIST_QUERY = `#graphql
         shippingAddress { name city provinceCode countryCodeV2 }
         billingAddress { name }
         shippingLine { title }
+        tags
+        app { name }
+        sourceName
       }
       pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
     }
@@ -109,6 +112,9 @@ interface ListData {
       } | null;
       billingAddress: { name: string | null } | null;
       shippingLine: { title: string } | null;
+      tags: string[];
+      app: { name: string } | null;
+      sourceName: string | null;
     }[];
     pageInfo: {
       hasNextPage: boolean;
@@ -131,6 +137,8 @@ export interface OrderRow {
   financialStatus: string | null;
   fulfillmentStatus: string;
   shippingMethod: string | null;
+  channel: string | null;
+  tags: string[];
 }
 
 export const numericId = (gid: string) => gid.slice(gid.lastIndexOf("/") + 1);
@@ -167,6 +175,8 @@ export async function listOrders(
       financialStatus: o.displayFinancialStatus,
       fulfillmentStatus: o.displayFulfillmentStatus,
       shippingMethod: o.shippingLine?.title ?? null,
+      channel: o.app?.name ?? o.sourceName ?? null,
+      tags: o.tags,
     };
   });
   return { rows, pageInfo: data.orders.pageInfo };

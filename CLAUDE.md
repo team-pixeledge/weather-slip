@@ -59,8 +59,12 @@ and deploy traps this app's config already avoids).
 
 ## Orders page + printed packing slips (added 2026-10-12)
 
-`/app/orders` lists the shop's orders live from Shopify (views Unfulfilled
-= open + unfulfilled/partial, On hold, All open, Fulfilled, All orders;
+`/app/orders` lists the shop's orders live from Shopify, laid out like
+Shopify's own Orders page on purpose (user request: familiar + compact):
+same tabs (All, Unfulfilled, Unpaid, Open, Archived), columns (Order, Date,
+Customer, Channel, Total, Payment/Fulfillment badges, Items, Delivery
+method, Tags) plus Weather; bulk print actions replace the filter row while
+orders are selected, 50 rows a page (views;
 date range Any time/30/60/180/365 days via `created_at:>=`; orders older
 than 60 days need `read_all_orders`, which Shopify must approve for the app
 — keep Vercel's `SCOPES` env in step with the toml, or auth loops; search is Shopify's own
@@ -102,6 +106,9 @@ the Liquid snippet for Shopify's own slip/Order Printer/emails) is optional.
 `/app/slip` picks the shop's default template and options with a live
 preview (sample order from `slip-sample.ts`, rendered client-side in a
 sandboxed iframe by the same `renderPackingSlips` the print tab uses).
+- Weather icons (`weather-icons.ts`): inline SVG chosen from the
+  condition *label* (clear / partly / cloudy / rain / storm / snow / fog),
+  so it's provider-neutral; used in forecast cards, tables and "Now".
 - Templates (`slip.ts`): CLASSIC (cards), MINIMAL (ink saver, forecast
   table, no images), DETAILED (prices, line totals, order totals — the only
   template with money), LABEL_4X6 (`@page 4in 6in`, big ship-to, no bill-to

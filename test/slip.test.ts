@@ -34,8 +34,8 @@ describe("orderSearchQuery", () => {
     expect(orderSearchQuery("unfulfilled", "")).toBe(
       "status:open AND (fulfillment_status:unfulfilled OR fulfillment_status:partial)",
     );
-    expect(orderSearchQuery("on_hold", "x OR status:closed")).toBe(
-      "status:open AND fulfillment_status:on_hold AND (x OR status:closed)",
+    expect(orderSearchQuery("open", "x OR status:closed")).toBe(
+      "status:open AND (x OR status:closed)",
     );
   });
 });
@@ -47,8 +47,8 @@ describe("orderSearchQuery: views and date range", () => {
     expect(orderSearchQuery("all", "#1001", "any", now)).toBe("(#1001)");
   });
   it("adds a created_at bound for a range", () => {
-    expect(orderSearchQuery("fulfilled", "", "180", now)).toBe(
-      "fulfillment_status:fulfilled AND created_at:>=2026-04-15",
+    expect(orderSearchQuery("archived", "", "180", now)).toBe(
+      "status:closed AND created_at:>=2026-04-15",
     );
   });
 });

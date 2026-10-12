@@ -106,6 +106,11 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionRes
   return { ok: false, error: "Unknown plan." };
 };
 
+// s-page `subheading` and s-button `inlineSize` are real web-component
+// attributes the React typings in @shopify/polaris-types leave out.
+const untyped = (props: Record<string, string>) => props as object;
+const FILL = untyped({ inlineSize: "fill" });
+
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
@@ -139,7 +144,13 @@ export default function Plans() {
   const rank = (id: PlanId) => PLAN_ORDER.indexOf(id);
 
   return (
-    <s-page heading="Plans & pricing" inlineSize="large">
+    <s-page
+      heading="Plans & pricing"
+      {...untyped({
+        subheading:
+          "Start free, or pick a paid plan. Plans count orders printed with weather — reprints are free. Change or cancel anytime.",
+      })}
+    >
       {/* ---- current plan + usage (was the Overview page) ---- */}
       <s-section>
         <s-stack direction="block" gap="small-300">
@@ -172,8 +183,7 @@ export default function Plans() {
           </div>
           {d.subscription?.currentPeriodEnd && (
             <s-text color="subdued">
-              {current.name} renews {fmtDate(d.subscription.currentPeriodEnd)} · billed on your
-              Shopify invoice
+              Renews {fmtDate(d.subscription.currentPeriodEnd)} · billed on your Shopify invoice
             </s-text>
           )}
           {pct >= 100 && (
@@ -277,9 +287,9 @@ export default function Plans() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {p.features.map((f) =>
                     /^Everything in /i.test(f) ? (
-                      <s-text key={f} type="strong" color="subdued">
-                        {f}
-                      </s-text>
+                      <div key={f} style={{ marginTop: 4 }}>
+                        <s-text color="subdued">{f}</s-text>
+                      </div>
                     ) : (
                       <div key={f} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
                         <span style={{ color: "#29845a", fontWeight: 700 }}>✓</span>
@@ -297,6 +307,7 @@ export default function Plans() {
                   </s-text>
                 )}
                 <s-button
+                  {...FILL}
                   variant={isActive ? "secondary" : "primary"}
                   tone={confirming ? "critical" : undefined}
                   disabled={isActive || (pending !== null && pending !== p.id)}
@@ -312,7 +323,7 @@ export default function Plans() {
                   {label}
                 </s-button>
                 {confirming && (
-                  <s-button variant="tertiary" onClick={() => setConfirmFree(false)}>
+                  <s-button {...FILL} variant="tertiary" onClick={() => setConfirmFree(false)}>
                     Keep my {current.name} plan
                   </s-button>
                 )}
@@ -352,21 +363,6 @@ export default function Plans() {
         )}
       </s-section>
 
-      <s-section slot="aside" heading="How plans work">
-        <s-paragraph>
-          Plans count orders, not weather lookups. An order counts once, the first time its
-          packing slip is printed with weather. Reprints are always free, and orders you never
-          print never count.
-        </s-paragraph>
-        <s-paragraph>
-          The count resets every {USAGE_PERIOD_DAYS} days. At the limit, slips still print — just
-          without the weather — until it resets or you upgrade.
-        </s-paragraph>
-        <s-paragraph>
-          Upgrades and downgrades take effect as soon as you approve them in Shopify; switching to
-          Free cancels straight away. Charges appear on your Shopify invoice.
-        </s-paragraph>
-      </s-section>
     </s-page>
   );
 }

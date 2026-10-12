@@ -16,28 +16,56 @@ import { ensureShop } from "../lib/shop.server";
 import { isSlipTemplate, SLIP_TEMPLATES, type SlipTemplate } from "../lib/slip";
 import { signPrintToken } from "../lib/print-token.server";
 
+// Laid out like Shopify's own Orders page (same tabs, columns and badges)
+// so merchants already know how to read it; printing is a bulk action on
+// the selection, like Shopify's.
+
 const WEATHER_LABEL: Record<string, string> = {
   OK: "Saved",
-  PENDING_DATES: "Waiting for forecast",
+  PENDING_DATES: "Pending",
   NO_LOCATION: "No address",
   LIMIT_REACHED: "Plan limit",
   FAILED: "Failed",
 };
 
-const FULFILLMENT_LABEL: Record<string, string> = {
-  UNFULFILLED: "Unfulfilled",
-  PARTIALLY_FULFILLED: "Partially fulfilled",
-  ON_HOLD: "On hold",
-  SCHEDULED: "Scheduled",
-  IN_PROGRESS: "In progress",
-  OPEN: "Open",
-  FULFILLED: "Fulfilled",
-  PENDING_FULFILLMENT: "Pending",
-  REQUEST_DECLINED: "Request declined",
+type Tone = "caution" | "warning" | "neutral" | "info";
+
+const FULFILLMENT: Record<string, { label: string; tone: Tone }> = {
+  UNFULFILLED: { label: "Unfulfilled", tone: "caution" },
+  PARTIALLY_FULFILLED: { label: "Partially fulfilled", tone: "warning" },
+  ON_HOLD: { label: "On hold", tone: "warning" },
+  SCHEDULED: { label: "Scheduled", tone: "info" },
+  IN_PROGRESS: { label: "In progress", tone: "info" },
+  PENDING_FULFILLMENT: { label: "Pending", tone: "info" },
+  OPEN: { label: "Open", tone: "info" },
+  FULFILLED: { label: "Fulfilled", tone: "neutral" },
+  RESTOCKED: { label: "Restocked", tone: "neutral" },
+  REQUEST_DECLINED: { label: "Request declined", tone: "warning" },
 };
 
-const humanise = (s: string | null) =>
-  s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ") : "—";
+const PAYMENT: Record<string, { label: string; tone: Tone }> = {
+  PAID: { label: "Paid", tone: "neutral" },
+  PENDING: { label: "Payment pending", tone: "caution" },
+  AUTHORIZED: { label: "Authorized", tone: "caution" },
+  PARTIALLY_PAID: { label: "Partially paid", tone: "caution" },
+  PARTIALLY_REFUNDED: { label: "Partially refunded", tone: "neutral" },
+  REFUNDED: { label: "Refunded", tone: "neutral" },
+  VOIDED: { label: "Voided", tone: "neutral" },
+  EXPIRED: { label: "Expired", tone: "warning" },
+};
+
+const humanise = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ");
+
+/** "Dec 1 at 6:45 am" this year, "Sep 11, 2025" before — like Shopify. */
+function orderDate(iso: string): string {
+  const d = new Date(iso);
+  if (d.getFullYear() !== new Date().getFullYear()) {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  const day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  return `${day} at ${time}`;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -45,7 +73,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const viewParam = url.searchParams.get("view");
   const view: OrderView = ORDER_VIEWS.some((v) => v.id === viewParam)
     ? (viewParam as OrderView)
-    : "unfulfilled";
+    : "all";
   const search = (url.searchParams.get("q") ?? "").slice(0, 200);
   const rangeParam = url.searchParams.get("range");
   const range: OrderRange = ORDER_RANGES.some((r) => r.id === rangeParam)
@@ -58,6 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     range,
     after: url.searchParams.get("after"),
     before: url.searchParams.get("before"),
+    pageSize: 50,
   });
 
   const snaps = rows.length
@@ -83,11 +112,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function Orders() {
   const { view, search, range, rows, pageInfo, printToken, defaultTemplate } =
     useLoaderData<typeof loader>();
-  // Template for this print; starts at the shop's saved default.
-  const [template, setTemplate] = useState<SlipTemplate>(defaultTemplate);
   const [, setParams] = useSearchParams();
   const navigation = useNavigation();
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
+  // Template for this print; starts at the shop's saved default.
+  const [template, setTemplate] = useState<SlipTemplate>(defaultTemplate);
   // Seeded from the URL once; after that the field is the source of truth
   // and pushes into the URL (debounced).
   const [query, setQuery] = useState(search);
@@ -117,8 +146,8 @@ export default function Orders() {
       return next;
     });
 
-  const pageIds = rows.map((r) => r.id);
-  const allOnPage = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const someOnPage = rows.some((r) => selected.has(r.id));
   const selectPage = (on: boolean) =>
     setSelected((prev) => {
       const next = new Map(prev);
@@ -149,12 +178,8 @@ export default function Orders() {
       >
         Print packing slips{selected.size ? ` (${selected.size})` : ""}
       </s-button>
-      <s-button
-        slot="secondary-actions"
-        disabled={selected.size === 0 || tooMany}
-        onClick={() => openPrint("customers", selectedIds)}
-      >
-        Print customer list
+      <s-button slot="secondary-actions" href="/app/slip">
+        Slip templates
       </s-button>
 
       {tooMany && (
@@ -172,136 +197,169 @@ export default function Orders() {
           onNextPage={() => update({ after: pageInfo.endCursor, before: null })}
           onPreviousPage={() => update({ before: pageInfo.startCursor, after: null })}
         >
-          <s-stack slot="filters" direction="inline" gap="base" alignItems="center">
-            <s-select
-              label="Show"
-              labelAccessibilityVisibility="exclusive"
-              value={view}
-              onChange={(e) =>
-                update({ view: e.currentTarget.value, after: null, before: null })
-              }
-            >
-              {ORDER_VIEWS.map((v) => (
-                <s-option key={v.id} value={v.id}>
-                  {v.label}
-                </s-option>
-              ))}
-            </s-select>
-            <s-select
-              label="Date"
-              labelAccessibilityVisibility="exclusive"
-              value={range}
-              onChange={(e) =>
-                update({ range: e.currentTarget.value === "any" ? null : e.currentTarget.value, after: null, before: null })
-              }
-            >
-              {ORDER_RANGES.map((r) => (
-                <s-option key={r.id} value={r.id}>
-                  {r.label}
-                </s-option>
-              ))}
-            </s-select>
-            <s-search-field
-              label="Search orders"
-              labelAccessibilityVisibility="exclusive"
-              placeholder="Order number, customer, email, SKU…"
-              value={query}
-              onInput={(e) => onSearch(e.currentTarget.value)}
-            />
-            <s-select
-              label="Slip template"
-              labelAccessibilityVisibility="exclusive"
-              value={template}
-              onChange={(e) => {
-                const v = e.currentTarget.value;
-                if (isSlipTemplate(v)) setTemplate(v);
-              }}
-            >
-              {SLIP_TEMPLATES.map((t) => (
-                <s-option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.id === defaultTemplate ? " (default)" : ""}
-                </s-option>
-              ))}
-            </s-select>
-            <s-checkbox
-              label="Select page"
-              checked={allOnPage}
-              disabled={rows.length === 0}
-              onChange={(e) => selectPage(e.currentTarget.checked)}
-            />
-            {selected.size > 0 && (
-              <s-button variant="tertiary" onClick={() => setSelected(new Map())}>
-                Clear {selected.size} selected
+          {selected.size > 0 ? (
+            // Bulk actions replace the filters while orders are selected,
+            // as on Shopify's Orders page.
+            <s-stack slot="filters" direction="inline" gap="small-300" alignItems="center">
+              <s-text type="strong">{selected.size} selected</s-text>
+              <s-select
+                label="Slip template"
+                labelAccessibilityVisibility="exclusive"
+                value={template}
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  if (isSlipTemplate(v)) setTemplate(v);
+                }}
+              >
+                {SLIP_TEMPLATES.map((t) => (
+                  <s-option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.id === defaultTemplate ? " (default)" : ""}
+                  </s-option>
+                ))}
+              </s-select>
+              <s-button
+                variant="primary"
+                disabled={tooMany}
+                onClick={() => openPrint("slips", selectedIds)}
+              >
+                Print packing slips
               </s-button>
-            )}
-          </s-stack>
+              <s-button disabled={tooMany} onClick={() => openPrint("customers", selectedIds)}>
+                Print customer list
+              </s-button>
+              <s-button variant="tertiary" onClick={() => setSelected(new Map())}>
+                Clear
+              </s-button>
+            </s-stack>
+          ) : (
+            <s-stack slot="filters" direction="inline" gap="small-300" alignItems="center">
+              <s-select
+                label="View"
+                labelAccessibilityVisibility="exclusive"
+                value={view}
+                onChange={(e) => update({ view: e.currentTarget.value, after: null, before: null })}
+              >
+                {ORDER_VIEWS.map((v) => (
+                  <s-option key={v.id} value={v.id}>
+                    {v.label}
+                  </s-option>
+                ))}
+              </s-select>
+              <s-search-field
+                label="Search and filter"
+                labelAccessibilityVisibility="exclusive"
+                placeholder="Search and filter"
+                value={query}
+                onInput={(e) => onSearch(e.currentTarget.value)}
+              />
+              <s-select
+                label="Date"
+                labelAccessibilityVisibility="exclusive"
+                value={range}
+                onChange={(e) =>
+                  update({
+                    range: e.currentTarget.value === "any" ? null : e.currentTarget.value,
+                    after: null,
+                    before: null,
+                  })
+                }
+              >
+                {ORDER_RANGES.map((r) => (
+                  <s-option key={r.id} value={r.id}>
+                    {r.label}
+                  </s-option>
+                ))}
+              </s-select>
+            </s-stack>
+          )}
 
           <s-table-header-row>
-            <s-table-header listSlot="inline"></s-table-header>
+            <s-table-header listSlot="inline">
+              <s-checkbox
+                accessibilityLabel="Select all orders on this page"
+                checked={allOnPage}
+                indeterminate={someOnPage && !allOnPage}
+                disabled={rows.length === 0}
+                onChange={(e) => selectPage(e.currentTarget.checked)}
+              />
+            </s-table-header>
             <s-table-header listSlot="primary">Order</s-table-header>
             <s-table-header>Date</s-table-header>
             <s-table-header listSlot="secondary">Customer</s-table-header>
-            <s-table-header>Destination</s-table-header>
-            <s-table-header format="numeric">Items</s-table-header>
+            <s-table-header>Channel</s-table-header>
             <s-table-header format="currency">Total</s-table-header>
-            <s-table-header>Payment</s-table-header>
-            <s-table-header listSlot="labeled">Fulfillment</s-table-header>
+            <s-table-header>Payment status</s-table-header>
+            <s-table-header listSlot="labeled">Fulfillment status</s-table-header>
+            <s-table-header>Items</s-table-header>
+            <s-table-header>Delivery method</s-table-header>
             <s-table-header>Weather</s-table-header>
-            <s-table-header></s-table-header>
+            <s-table-header>Tags</s-table-header>
           </s-table-header-row>
           <s-table-body>
-            {rows.map((r) => (
-              <s-table-row key={r.id}>
-                <s-table-cell>
-                  <s-checkbox
-                    accessibilityLabel={`Select ${r.name}`}
-                    checked={selected.has(r.id)}
-                    onChange={(e) => toggle(r.id, r.name, e.currentTarget.checked)}
-                  />
-                </s-table-cell>
-                <s-table-cell>
-                  <s-link href={`shopify://admin/orders/${r.id}`}>{r.name}</s-link>
-                </s-table-cell>
-                <s-table-cell>
-                  {new Date(r.createdAt).toLocaleDateString(undefined, {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </s-table-cell>
-                <s-table-cell>{r.customer ?? "—"}</s-table-cell>
-                <s-table-cell>{r.destination ?? "No shipping address"}</s-table-cell>
-                <s-table-cell>{r.itemCount}</s-table-cell>
-                <s-table-cell>
-                  {new Intl.NumberFormat(undefined, {
-                    style: "currency",
-                    currency: r.currency,
-                  }).format(Number(r.total))}
-                </s-table-cell>
-                <s-table-cell>{humanise(r.financialStatus)}</s-table-cell>
-                <s-table-cell>
-                  <s-badge
-                    tone={
-                      r.fulfillmentStatus === "FULFILLED"
-                        ? "success"
-                        : r.fulfillmentStatus === "ON_HOLD"
-                          ? "caution"
-                          : "warning"
-                    }
-                  >
-                    {FULFILLMENT_LABEL[r.fulfillmentStatus] ?? humanise(r.fulfillmentStatus)}
-                  </s-badge>
-                </s-table-cell>
-                <s-table-cell>{r.weather ? (WEATHER_LABEL[r.weather] ?? r.weather) : "—"}</s-table-cell>
-                <s-table-cell>
-                  <s-button variant="tertiary" onClick={() => openPrint("slips", [r.id])}>
-                    Slip
-                  </s-button>
-                </s-table-cell>
-              </s-table-row>
-            ))}
+            {rows.map((r) => {
+              const pay = r.financialStatus ? PAYMENT[r.financialStatus] : null;
+              const ful = FULFILLMENT[r.fulfillmentStatus];
+              return (
+                <s-table-row key={r.id}>
+                  <s-table-cell>
+                    <s-checkbox
+                      accessibilityLabel={`Select ${r.name}`}
+                      checked={selected.has(r.id)}
+                      onChange={(e) => toggle(r.id, r.name, e.currentTarget.checked)}
+                    />
+                  </s-table-cell>
+                  <s-table-cell>
+                    <s-link href={`shopify://admin/orders/${r.id}`}>{r.name}</s-link>
+                  </s-table-cell>
+                  <s-table-cell>{orderDate(r.createdAt)}</s-table-cell>
+                  <s-table-cell>{r.customer ?? "No customer"}</s-table-cell>
+                  <s-table-cell>{r.channel ?? ""}</s-table-cell>
+                  <s-table-cell>
+                    {new Intl.NumberFormat(undefined, {
+                      style: "currency",
+                      currency: r.currency,
+                    }).format(Number(r.total))}
+                  </s-table-cell>
+                  <s-table-cell>
+                    {r.financialStatus && (
+                      <s-badge tone={pay?.tone ?? "neutral"}>
+                        {pay?.label ?? humanise(r.financialStatus)}
+                      </s-badge>
+                    )}
+                  </s-table-cell>
+                  <s-table-cell>
+                    <s-badge tone={ful?.tone ?? "neutral"}>
+                      {ful?.label ?? humanise(r.fulfillmentStatus)}
+                    </s-badge>
+                  </s-table-cell>
+                  <s-table-cell>
+                    {r.itemCount} {r.itemCount === 1 ? "item" : "items"}
+                  </s-table-cell>
+                  <s-table-cell>{r.shippingMethod ?? ""}</s-table-cell>
+                  <s-table-cell>
+                    {r.weather ? (
+                      <s-badge
+                        tone={
+                          r.weather === "OK"
+                            ? "success"
+                            : r.weather === "PENDING_DATES"
+                              ? "info"
+                              : "warning"
+                        }
+                      >
+                        {WEATHER_LABEL[r.weather] ?? r.weather}
+                      </s-badge>
+                    ) : (
+                      <s-button variant="tertiary" onClick={() => openPrint("slips", [r.id])}>
+                        Print slip
+                      </s-button>
+                    )}
+                  </s-table-cell>
+                  <s-table-cell>{r.tags.join(", ")}</s-table-cell>
+                </s-table-row>
+              );
+            })}
           </s-table-body>
         </s-table>
         {rows.length === 0 && !loading && (
@@ -311,24 +369,6 @@ export default function Orders() {
             </s-paragraph>
           </s-box>
         )}
-      </s-section>
-
-      <s-section slot="aside" heading="Printing">
-        <s-paragraph>
-          Choose the slip template next to the search box; change the default
-          and slip options in <s-link href="/app/slip">Packing slip</s-link>.
-        </s-paragraph>
-        <s-paragraph>
-          Packing slips open in a new tab with the destination&apos;s forecast
-          for every day available (today plus the next few days), with the
-          dispatch and delivery days marked. Print, or choose “Save as PDF”.
-        </s-paragraph>
-        <s-paragraph>
-          The slip uses the latest forecast at print time. An order counts
-          toward your plan the first time it&apos;s printed with weather;
-          reprints are free. Printing also saves the weather on the order for
-          Shopify&apos;s own packing slip and invoices.
-        </s-paragraph>
       </s-section>
     </s-page>
   );
