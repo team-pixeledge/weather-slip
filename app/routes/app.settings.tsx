@@ -106,6 +106,12 @@ export default function Settings() {
     />
   );
 
+  // Save stays faded until something differs from what's saved (the
+  // loader re-runs after a save, so it fades again once stored).
+  const dirty =
+    apiKey !== "" ||
+    (Object.keys(s) as (keyof typeof s)[]).some((k) => s[k] !== loaded.settings[k]);
+
   const save = () =>
     fetcher.submit(
       { ...s, ...(apiKey !== "" ? { apiKey } : {}) },
@@ -114,7 +120,12 @@ export default function Settings() {
 
   return (
     <s-page heading="Settings">
-      <s-button slot="primary-action" onClick={save} {...(fetcher.state !== "idle" ? { loading: true } : {})}>
+      <s-button
+        slot="primary-action"
+        onClick={save}
+        disabled={!dirty}
+        {...(fetcher.state !== "idle" ? { loading: true } : {})}
+      >
         Save
       </s-button>
 

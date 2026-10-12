@@ -73,6 +73,8 @@ export default function PackingSlip() {
   }, [o, loaded.today, loaded.shopName, loaded.unit]);
 
   const isLabel = o.template === "LABEL_4X6";
+  // Save stays faded until something differs from what's saved.
+  const dirty = (Object.keys(o) as (keyof SlipOptions)[]).some((k) => o[k] !== loaded.options[k]);
   const toggle = (key: "showImages" | "showSku" | "showBilling" | "showNote", label: string, disabled = false) => (
     <s-checkbox
       label={label}
@@ -87,6 +89,7 @@ export default function PackingSlip() {
       <s-button
         slot="primary-action"
         onClick={() => fetcher.submit({ ...o }, { method: "POST", encType: "application/json" })}
+        disabled={!dirty}
         {...(fetcher.state !== "idle" ? { loading: true } : {})}
       >
         Save
@@ -96,7 +99,9 @@ export default function PackingSlip() {
       </s-button>
 
       <s-section heading="Template">
-        <s-grid gridTemplateColumns="@container (inline-size > 640px) 1fr 1fr 1fr 1fr, 1fr 1fr" gap="base">
+        {/* One row of four (plain CSS grid — s-grid's container query
+            didn't apply here and wrapped to two rows). */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
           {SLIP_TEMPLATES.map((t) => {
             const selected = o.template === t.id;
             return (
@@ -120,7 +125,7 @@ export default function PackingSlip() {
               </s-clickable>
             );
           })}
-        </s-grid>
+        </div>
       </s-section>
 
       <s-section heading="Preview">
