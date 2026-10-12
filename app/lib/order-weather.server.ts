@@ -9,7 +9,7 @@ import {
 import { localDate, shippingDates } from "./dates";
 import { locationKey } from "./location";
 import { PLANS } from "./plans";
-import { consumeUsage, displaySettings, ensureShop, providerFor } from "./shop.server";
+import { countOrder, displaySettings, ensureShop, isCounted, providerFor } from "./shop.server";
 import {
   buildSnapshot,
   destinationToday,
@@ -61,6 +61,28 @@ interface OrderData {
 }
 
 export const orderGid = (orderId: string) => `gid://shopify/Order/${orderId}`;
+
+/** Dispatch and delivery dates for an order, in the shop's timezone. */
+export function orderShippingDates(
+  order: {
+    createdAt: string;
+    fulfillments: { createdAt: string; estimatedDeliveryAt: string | null }[];
+  },
+  shop: Shop,
+) {
+  const fulfillment = order.fulfillments[0];
+  const tz = shop.timezone;
+  return shippingDates(
+    {
+      orderDate: localDate(new Date(order.createdAt), tz),
+      fulfilledDate: fulfillment ? localDate(new Date(fulfillment.createdAt), tz) : null,
+      estimatedDeliveryDate: fulfillment?.estimatedDeliveryAt
+        ? localDate(new Date(fulfillment.estimatedDeliveryAt), tz)
+        : null,
+    },
+    shop,
+  );
+}
 
 async function fetchOrder(admin: AdminClient, orderId: string): Promise<OrderData> {
   const res = await admin.graphql(ORDER_QUERY, { variables: { id: orderGid(orderId) } });
@@ -137,8 +159,8 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
 
   const prev = await latestSnapshot(job.shop, job.orderId);
 
-  // At-least-once delivery: a retried orders/create must not re-bill usage
-  // or overwrite what may already be printed.
+  // CREATE comes from the first print of an order; a duplicate (two prints
+  // before the job ran) must not overwrite what's already saved.
   if (job.reason === "CREATE" && prev) return;
   if (job.reason === "PENDING_FILL" && prev?.status !== "PENDING_DATES") return;
   if (job.reason === "ADDRESS_CHANGE" && prev?.frozenAt) return;
@@ -176,8 +198,16 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
     return;
   }
 
-  // Only the first snapshot of an order counts against the plan.
-  if (!prev && !(await consumeUsage(current, now))) {
+  // Plans count orders, not API calls. Only a merchant action — printing
+  // the slip (CREATE, or REFRESH for an order turned away earlier) or
+  // Refresh — may count an order, once. Address changes and pending fills
+  // only ever update an order that's already counted.
+  const counted =
+    job.reason === "CREATE" || job.reason === "REFRESH"
+      ? await countOrder(current, job.orderId, now)
+      : await isCounted(job.shop, job.orderId);
+  if (!counted) {
+    if (job.reason === "ADDRESS_CHANGE" || job.reason === "PENDING_FILL") return;
     await saveVersion(prev, { ...base, status: "LIMIT_REACHED" });
     return;
   }
@@ -213,18 +243,7 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
       settings,
     );
   } else {
-    const fulfillment = order.fulfillments[0];
-    const tz = current.timezone;
-    const dates = shippingDates(
-      {
-        orderDate: localDate(new Date(order.createdAt), tz),
-        fulfilledDate: fulfillment ? localDate(new Date(fulfillment.createdAt), tz) : null,
-        estimatedDeliveryDate: fulfillment?.estimatedDeliveryAt
-          ? localDate(new Date(fulfillment.estimatedDeliveryAt), tz)
-          : null,
-      },
-      current,
-    );
+    const dates = orderShippingDates(order, current);
     snap = buildSnapshot({
       forecast,
       horizonDays: provider.horizonDays,

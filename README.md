@@ -1,9 +1,10 @@
 # Weather Slip
 
-Shopify app that saves destination weather on every order — current
-temperature plus dispatch-day and delivery-day forecasts — so it prints on
-packing slips, invoices and order emails. Weather is saved once per order,
-so reprints always match.
+Shopify app that prints packing slips with the destination's weather
+forecast, and saves that weather on the order (current temperature plus
+dispatch-day and delivery-day forecasts) so Shopify's own packing slip,
+invoices and order emails can print it too. Plans count orders printed with
+weather — once per order, reprints are free — not API calls.
 
 Architecture, design rules and open items: see [CLAUDE.md](CLAUDE.md).
 

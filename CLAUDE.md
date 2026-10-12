@@ -23,8 +23,12 @@ and deploy traps this app's config already avoids).
   plain text — no emoji/HTML, it must survive PDF renderers) and `snapshot`
   (JSON, both °C and °F). Shopify's packing slip, Order Printer and Order
   Printer Pro all read `order.metafields.ns.key`. Snippets: `/app/snippets`.
+- **Weather only on print (user decision 2026-10-12).** New orders get
+  nothing: `orders/create` isn't subscribed. The first print of a slip from
+  `/app/orders` fetches weather and enqueues a CREATE job that writes the
+  metafield, so Shopify's own slip shows it from then on.
 - **Reprints never change by accident.** The first snapshot is written once
-  per order; a retried `orders/create` is a no-op. Recompute only on: a real
+  per order; a duplicate CREATE is a no-op. Recompute only on: a real
   destination change (`locationKey` fingerprint differs) before shipping, a
   merchant Refresh, or a pending-date fill. Fulfillment **freezes** the
   snapshot (`frozenAt`) — it is not recomputed with the real ship date, so a
@@ -35,13 +39,58 @@ and deploy traps this app's config already avoids).
 - **Every change is a new version** (`OrderWeatherSnapshot.version`); the
   highest is live. Old versions are kept.
 - **Address data is minimised** (Level 2 protected customer data): the
-  order query asks only for city/zip/country/coordinates; we store city,
+  weather job's order query asks only for city/zip/country/coordinates
+  (the print views read more, render it, and store none of it); we store city,
   country, a 0.1° (~11 km) grid point and a hash. Never the street, name,
   email or phone. Jobs hold only the order ID, never the payload.
 - **Weather cache is shared across shops**, keyed by provider + 0.1° grid
   cell, 3h TTL (`cache.server.ts`); geocodes 30 days.
-- Usage: only an order's *first* snapshot counts; `consumeUsage` is an
-  atomic conditional increment (verified: 5 concurrent at 48/50 → 2 granted).
+- **Plans count orders, not API calls** (user decision 2026-10-12): an
+  order counts once, ever, the first time a merchant action gets it weather
+  — printing its slip with a usable destination, or Refresh. Reprints, later
+  months, address changes and pending fills never count. `countOrder`
+  (`shop.server.ts`) inserts the `CountedOrder (shop, orderId)` row and takes
+  `consumeUsage` in one transaction; at the limit the row rolls back so the
+  order can be counted later. Jobs: CREATE/REFRESH may count, ADDRESS_CHANGE/
+  PENDING_FILL only proceed for already-counted orders. Verified on a local
+  DB: reprint free, 4 concurrent prints of one order → 1 count, refused at
+  50/50 with no row left, counted after the period resets. Migration
+  `counted_orders` backfills orders that already had weather.
+
+## Orders page + printed packing slips (added 2026-10-12)
+
+`/app/orders` lists the shop's orders live from Shopify (views Unfulfilled
+= open + unfulfilled/partial, On hold, All open; search is Shopify's own
+order search, bracketed so it can't widen the view; cursor pagination;
+selection kept across pages). "Print packing slips" / "Print customer
+list" (max 50 orders, `order-views.ts`) open `/print/slips` or
+`/print/customers` in a new tab: plain HTML the browser prints or saves as
+PDF (no headless Chrome on Vercel).
+- **Auth for the print tab** is a 2h HMAC token (`print-token.server.ts`,
+  keyed on `SHOPIFY_API_SECRET`) carrying only the shop, signed by the
+  Orders loader. Order IDs go in the URL and are fetched with that shop's
+  offline token, so a token can't reach another shop. Responses are
+  `no-store`, `no-referrer`, nonce-CSP, images from cdn.shopify.com only.
+- **Slip weather is the live forecast at print time** (shared 3h cache),
+  every day from today at the destination to the provider horizon, with
+  dispatch/delivery outlined (`slip.ts`, pure + tested). It deliberately
+  doesn't touch the saved metafield snapshot, which still follows the
+  "reprints never change" rule; the slip reuses the snapshot's
+  dispatch/delivery dates when one exists so the two agree.
+- **Plan limits on print:** each order with a usable destination goes
+  through `countOrder` (no destination → no weather, no count); refused →
+  the slip prints "plan limit reached" instead of weather. An order without
+  saved weather then gets a CREATE/REFRESH job (it's already counted, so the
+  job doesn't count it again).
+- **Protected customer data:** slips print the customer name, street
+  address and phone. They're read from Shopify per print and never stored —
+  but the Partner Dashboard request must now cover **name, address and
+  phone** (not email). Until it's approved, Shopify returns those fields as
+  null with an error; `orders.server.ts` keeps the partial data so slips
+  still print with blanks instead of failing.
+- Queries were validated against the 2026-10 Admin schema
+  (introspection of `shopify.dev/admin-graphql-direct-proxy/2026-10`), but
+  not yet run against a real store.
 
 ## Weather providers
 
@@ -111,12 +160,15 @@ the provider. `WEATHER_PROVIDER` picks one:
   changing it later breaks every merchant's pasted snippet). Also check how
   often `shippingAddress.latitude/longitude` is populated.
 - Billing API wiring (plans are enforced from `Shop.plan`, which nothing
-  sets yet besides the default FREE), print action extension, order-details
+  sets yet besides the default FREE), print action extension (would put
+  "Weather slip" in Shopify's own Orders → Print menu; the in-app Orders
+  page covers printing until then), order-details
   admin block, Pro backfill, heat/cold tags.
 - Partner app "Weather-Slip" (org ThePixelEdge) is linked, but **`shopify
   app deploy` is blocked** until protected customer data access is
   declared in the Partner Dashboard (orders webhooks carry PCD). Request
-  only what we use: Level 1 + the address field. Then rerun
+  only what we use: Level 1 + name, address and phone (the printed slips
+  need all three; never email). Then rerun
   `shopify app deploy --config shopify.app.toml --allow-updates`.
   Still needed: a separate staging app/toml.
 - `shop.ianaTimezone` is captured on install and refreshed per job.
@@ -129,4 +181,6 @@ npx react-router build            # Node build
 VERCEL=1 npx react-router build   # Vercel build output
 ```
 Local DB: `docker start weather-slip-db` (port 55450, see `.env.example`).
-Never point a local run or `prisma migrate dev` at the Neon production URL.
+Never point a local run or `prisma migrate dev` at the Neon production URL
+— `.env.local` (pulled by `vercel env pull`) holds exactly that. Run Prisma
+with `DATABASE_URL`/`DATABASE_URL_UNPOOLED` set inline to the local DB.

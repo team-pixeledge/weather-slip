@@ -20,7 +20,7 @@ interface OrderWebhook {
   } | null;
 }
 
-// orders/create and orders/updated. Respond fast (Shopify retries after 5s);
+// orders/updated (and stray orders/create). Respond fast (Shopify retries after 5s);
 // the actual weather work runs after the response via runInBackground, with
 // the cron drain as the safety net. The payload's address is only used to
 // compute a fingerprint here — it's never stored or queued.
@@ -29,10 +29,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const order = payload as OrderWebhook;
   const orderId = String(order.id);
 
+  // Weather is fetched (and the order counted) only when the merchant
+  // prints its slip, so a new order needs nothing. orders/create is no
+  // longer subscribed; this stays for deliveries already in flight.
   if (topic === "ORDERS_CREATE") {
     await ensureShop(shop);
-    await enqueue(shop, orderId, "CREATE");
-    runInBackground(drainQueue({ budgetMs: 20_000 }));
     return new Response();
   }
 

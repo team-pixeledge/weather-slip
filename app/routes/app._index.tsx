@@ -79,7 +79,7 @@ export default function Overview() {
     <s-page heading="Weather Slip">
       <s-section heading="This month">
         <s-paragraph>
-          {plan.name} plan · {usage} of {plan.ordersPerPeriod} orders used
+          {plan.name} plan · {usage} of {plan.ordersPerPeriod} orders printed with weather
         </s-paragraph>
         {failedJobs > 0 && (
           <s-banner tone="warning">
@@ -91,9 +91,11 @@ export default function Overview() {
       <s-section heading="Recent orders">
         {recent.length === 0 ? (
           <s-paragraph>
-            No orders yet. New orders get their destination weather
-            automatically — then add it to your packing slip from{" "}
-            <s-link href="/app/snippets">Invoice &amp; slip setup</s-link>.
+            No orders with weather yet. Print packing slips from{" "}
+            <s-link href="/app/orders">Orders</s-link> — each order counts once
+            toward your plan the first time it&apos;s printed with weather, and
+            the weather is then also saved for Shopify&apos;s own slip (see{" "}
+            <s-link href="/app/snippets">Invoice &amp; slip setup</s-link>).
           </s-paragraph>
         ) : (
           <s-table>
@@ -131,9 +133,11 @@ export default function Overview() {
 
       <s-section slot="aside" heading="How reprints work">
         <s-paragraph>
-          Weather is saved on each order once, so every reprint shows the same
-          text. It locks when the order ships. Refresh replaces it on purpose
-          (the earlier version is kept).
+          Your plan counts orders, not weather lookups: an order counts the
+          first time its slip is printed with weather, and reprints are free.
+          The weather saved on the order then stays the same on every reprint
+          of Shopify&apos;s own slip and locks when the order ships. Refresh
+          replaces it on purpose (the earlier version is kept).
         </s-paragraph>
       </s-section>
     </s-page>

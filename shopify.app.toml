@@ -20,8 +20,9 @@ automatically_update_urls_on_dev = false
 
 [access_scopes]
 # read_orders: order date, fulfillments and the shipping address's
-#   city/zip/country/coordinates (Level 2 protected customer data — request
-#   only the address field in the Partner Dashboard, not name/email/phone).
+#   city/zip/country/coordinates for weather; the printed packing slips also
+#   show name, street address and phone (Level 2 protected customer data —
+#   request name, address and phone in the Partner Dashboard, never email).
 # write_orders: metafieldsSet on Order needs it.
 # Shopify grants what's listed here, not what auth.begin asks for — a scope
 # change does nothing until `shopify app deploy` pushes this file.
@@ -42,7 +43,10 @@ api_version = "2026-10"
   uri = "/webhooks/app/scopes_update"
 
   [[webhooks.subscriptions]]
-  topics = ["orders/create", "orders/updated"]
+  # No orders/create: weather is fetched only when a slip is printed.
+  # orders/updated keeps printed orders' saved weather in step with
+  # address changes and freezes it on fulfillment.
+  topics = ["orders/updated"]
   uri = "/webhooks/orders"
 
   # Mandatory for public apps.

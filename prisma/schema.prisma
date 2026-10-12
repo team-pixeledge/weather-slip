@@ -76,6 +76,20 @@ model Shop {
 
   snapshots OrderWeatherSnapshot[]
   jobs      WeatherJob[]
+  counted   CountedOrder[]
+}
+
+// Plans count orders, not API calls: one row per order the first time a
+// merchant gets weather for it (printing it, or Refresh). The primary key
+// makes "count each order once" atomic; usageCount moves with it.
+model CountedOrder {
+  shop      String
+  orderId   String // numeric Shopify order ID
+  countedAt DateTime @default(now())
+
+  shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@id([shop, orderId])
 }
 
 // Shared across shops: one forecast payload per rounded location. No PII —
