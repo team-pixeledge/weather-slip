@@ -164,12 +164,12 @@ the provider. `WEATHER_PROVIDER` picks one:
   "Weather slip" in Shopify's own Orders → Print menu; the in-app Orders
   page covers printing until then), order-details
   admin block, Pro backfill, heat/cold tags.
-- Partner app "Weather-Slip" (org ThePixelEdge) is linked, but **`shopify
-  app deploy` is blocked** until protected customer data access is
-  declared in the Partner Dashboard (orders webhooks carry PCD). Request
-  only what we use: Level 1 + name, address and phone (the printed slips
-  need all three; never email). Then rerun
-  `shopify app deploy --config shopify.app.toml --allow-updates`.
+- Partner app "Weather-Slip" (org ThePixelEdge): protected customer data
+  declared 2026-10-12 (Store management + App functionality; Name, Phone,
+  Address — not Email), and `shopify app deploy --config shopify.app.toml
+  --allow-updates` released version weather-slip-2 the same day. Before App
+  Store review: a privacy policy + merchant terms (the PCD form already
+  answers "yes" to merchant data-protection agreements).
   Still needed: a separate staging app/toml.
 - `shop.ianaTimezone` is captured on install and refreshed per job.
 
