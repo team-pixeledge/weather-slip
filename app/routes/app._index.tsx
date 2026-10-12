@@ -217,6 +217,18 @@ export default function Orders() {
         Slip templates
       </s-button>
 
+      {rows.length > 0 && rows.every((r) => !r.customer) && rows.some((r) => r.destination) && (
+        // Orders have a city but never a name: Shopify is withholding
+        // protected customer fields (it returns them empty, not an error).
+        <s-banner tone="warning" heading="Customer names and addresses are hidden by Shopify">
+          Shopify only shares names, street addresses and phone numbers with Weather Slip once
+          protected customer data access is saved for the app. In the Partner Dashboard open
+          Weather-Slip → API access requests → Protected customer data access, and under
+          &quot;Protected customer fields&quot; select Name, Address and Phone (and Email if you
+          want it), tick a reason for each and click Save. Then reload this page.
+        </s-banner>
+      )}
+
       {!allOrdersAccess && (
         <s-banner tone="info">
           Showing orders from the last 60 days. Shopify shows apps older orders only once
