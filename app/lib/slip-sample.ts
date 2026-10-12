@@ -20,6 +20,8 @@ export function sampleSlipData(today: string, shopName: string) {
     createdAt: `${today}T09:30:00Z`,
     note: "Please leave the parcel in the shade.",
     phone: null,
+    email: "jordan.lee@example.com",
+    displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "UNFULFILLED",
     shippingLine: { title: "Express (2–3 days)" },
     shippingAddress: {

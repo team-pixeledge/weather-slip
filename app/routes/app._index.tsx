@@ -1,12 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { listOrders } from "../lib/orders.server";
 import {
+  AUTO_REFRESH_MS,
+  DEFAULT_PAGE_SIZE,
   MAX_PRINT_ORDERS,
+  PAGE_SIZES,
   ORDER_RANGES,
   ORDER_VIEWS,
   type OrderRange,
@@ -80,13 +83,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ? (rangeParam as OrderRange)
     : "any";
 
+  const perParam = Number(url.searchParams.get("per"));
+  const perPage = (PAGE_SIZES as readonly number[]).includes(perParam) ? perParam : DEFAULT_PAGE_SIZE;
+
   const { rows, pageInfo } = await listOrders(admin, {
     view,
     search,
     range,
     after: url.searchParams.get("after"),
     before: url.searchParams.get("before"),
-    pageSize: 50,
+    pageSize: perPage,
   });
 
   const snaps = rows.length
@@ -102,6 +108,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     view,
     search,
     range,
+    perPage,
+    loadedAt: new Date().toISOString(),
     rows: rows.map((r) => ({ ...r, weather: weather[r.id] ?? null })),
     pageInfo,
     printToken: signPrintToken(session.shop),
@@ -112,8 +120,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function Orders() {
-  const { view, search, range, rows, pageInfo, printToken, defaultTemplate, allOrdersAccess } =
-    useLoaderData<typeof loader>();
+  const {
+    view,
+    search,
+    range,
+    perPage,
+    loadedAt,
+    rows,
+    pageInfo,
+    printToken,
+    defaultTemplate,
+    allOrdersAccess,
+  } = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
   const [, setParams] = useSearchParams();
   const navigation = useNavigation();
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
@@ -169,6 +188,20 @@ export default function Orders() {
     window.open(u.toString(), "_blank", "noopener");
   };
   const selectedIds = [...selected.keys()];
+
+  // New orders appear on their own: re-run the loader every 30s while the
+  // tab is visible and on the first page (later pages would shift under
+  // the merchant). The selection survives a refresh.
+  const onFirstPage = !pageInfo.hasPreviousPage;
+  useEffect(() => {
+    if (!onFirstPage) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible" && revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [onFirstPage, revalidator]);
   const loading = navigation.state !== "idle";
 
   return (
@@ -249,7 +282,7 @@ export default function Orders() {
               slot="filters"
               style={{
                 display: "grid",
-                gridTemplateColumns: "140px minmax(0, 1fr) 160px",
+                gridTemplateColumns: "140px minmax(0, 1fr) 160px 130px",
                 gap: 8,
                 alignItems: "center",
               }}
@@ -288,6 +321,24 @@ export default function Orders() {
                 {ORDER_RANGES.map((r) => (
                   <s-option key={r.id} value={r.id}>
                     {r.label}
+                  </s-option>
+                ))}
+              </s-select>
+              <s-select
+                label="Orders per page"
+                labelAccessibilityVisibility="exclusive"
+                value={String(perPage)}
+                onChange={(e) =>
+                  update({
+                    per: e.currentTarget.value === String(DEFAULT_PAGE_SIZE) ? null : e.currentTarget.value,
+                    after: null,
+                    before: null,
+                  })
+                }
+              >
+                {PAGE_SIZES.map((n) => (
+                  <s-option key={n} value={String(n)}>
+                    {n} per page
                   </s-option>
                 ))}
               </s-select>
@@ -382,6 +433,16 @@ export default function Orders() {
             })}
           </s-table-body>
         </s-table>
+        {rows.length > 0 && (
+          <div style={{ padding: "8px 16px", borderTop: "1px solid #ebebeb" }}>
+            <s-text color="subdued">
+              {rows.length} {rows.length === 1 ? "order" : "orders"} shown
+              {onFirstPage
+                ? ` · updates automatically · last checked ${new Date(loadedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                : ""}
+            </s-text>
+          </div>
+        )}
         {rows.length === 0 && !loading && (
           // Empty state, like Shopify's Orders page.
           <div style={{ padding: "48px 16px 56px", textAlign: "center" }}>

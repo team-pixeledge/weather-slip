@@ -200,6 +200,8 @@ const PRINT_QUERY = `#graphql
         createdAt
         note
         phone
+        email
+        displayFinancialStatus
         displayFulfillmentStatus
         shippingLine { title }
         shippingAddress {
@@ -269,6 +271,9 @@ export interface PrintOrder {
   createdAt: string;
   note: string | null;
   phone: string | null;
+  /** Protected (Email field); null until that access is granted. */
+  email?: string | null;
+  displayFinancialStatus?: string | null;
   displayFulfillmentStatus: string;
   shippingLine: { title: string } | null;
   shippingAddress: PrintAddress | null;

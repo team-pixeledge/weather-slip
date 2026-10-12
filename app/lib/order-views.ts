@@ -32,4 +32,10 @@ export const ORDER_RANGES: { id: OrderRange; label: string }[] = [
   { id: "365", label: "Last 12 months" },
 ];
 
+export const PAGE_SIZES = [25, 50, 100, 250] as const; // 250 = Shopify's max per request
+export const DEFAULT_PAGE_SIZE = 50;
+
+/** How often the Orders page checks Shopify for new orders while open. */
+export const AUTO_REFRESH_MS = 30_000;
+
 export const MAX_PRINT_ORDERS = 50;

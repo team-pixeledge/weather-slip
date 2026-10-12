@@ -3,7 +3,7 @@ import prisma from "../db.server";
 import { decrypt } from "./crypto.server";
 import type { DisplaySettings } from "./format";
 import { PLANS, USAGE_PERIOD_DAYS } from "./plans";
-import type { SlipOptions } from "./slip";
+import { sanitizeDesign, type SlipOptions } from "./slip";
 import { OpenMeteoProvider } from "./weather/open-meteo.server";
 import { OpenWeatherProvider } from "./weather/openweather.server";
 import type { WeatherProvider } from "./weather/types";
@@ -29,6 +29,7 @@ export function slipOptions(shop: Shop): SlipOptions {
     showBilling: shop.slipShowBilling,
     showNote: shop.slipShowNote,
     footer: shop.slipFooter,
+    design: sanitizeDesign(shop.slipDesign),
   };
 }
 

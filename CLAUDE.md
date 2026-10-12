@@ -64,7 +64,9 @@ Shopify's own Orders page on purpose (user request: familiar + compact):
 same tabs (All, Unfulfilled, Unpaid, Open, Archived), columns (Order, Date,
 Customer, Channel, Total, Payment/Fulfillment badges, Items, Delivery
 method, Tags) plus Weather; bulk print actions replace the filter row while
-orders are selected, 50 rows a page (views;
+orders are selected; 25/50/100/250 rows a page (`?per=`, default 50); it
+re-runs its loader every 30s while visible and on the first page, so new
+orders appear without a reload (views;
 date range Any time/30/60/180/365 days via `created_at:>=`; orders older
 than 60 days need `read_all_orders`, which Shopify must approve for the app
 — keep Vercel's `SCOPES` env in step with the toml, or auth loops; search is Shopify's own
@@ -113,8 +115,19 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   table, no images), DETAILED (prices, line totals, order totals — the only
   template with money), LABEL_4X6 (`@page 4in 6in`, big ship-to, no bill-to
   or store footer).
-- Options on `Shop.slip*`: paper A4/Letter (ignored for labels), images,
-  SKUs, bill-to, note, footer (null = default thank-you, "" = none, max 300).
+- Options on `Shop.slip*`: paper A4/A5/Letter/Legal (ignored for labels),
+  images, SKUs, bill-to, note, footer (null = default thank-you, "" = none,
+  max 300).
+- Full customisation in `Shop.slipDesign` (JSON, `SlipDesign` in `slip.ts`,
+  always read/written through `sanitizeDesign`): logo (a cdn.shopify.com
+  link from Shopify Files — the Admin API exposes no brand logo, and the
+  print CSP allows only that image host), position left/centre/right and
+  size, title, top message, order date / shipping method / phone / email /
+  payment status / item count, each weather part, each footer part + extra
+  text, accent colour (CSS var), system font stacks only (no external
+  fonts under the CSP), five text sizes, label 4×6 or 4×4. Customer email
+  prints only once Email is granted in protected customer data.
+- `/app/slip`: template row, settings column + sticky live preview.
 - The Orders page can override the template for one print (`?tpl=`).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.

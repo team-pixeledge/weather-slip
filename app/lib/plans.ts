@@ -93,7 +93,7 @@ export function comparisonRows(): [string, ...string[]][] {
     ["Orders printed with weather / month", ...each((p) => p.ordersPerPeriod.toLocaleString("en-US"))],
     ["Reprints", ...each(() => "Free")],
     ["Bulk packing slips + customer list", ...each(() => "✓")],
-    ["Slip templates (Classic, Minimal, Detailed, 4×6 label)", ...each(() => "✓")],
+    ["Slip templates (Classic, Minimal, Detailed, Shipping label)", ...each(() => "✓")],
     ["Forecast for every day to delivery", ...each(() => "✓")],
     ["Dispatch-day forecast in saved weather", ...each((p) => yes(p.dispatchForecast))],
     ["Weather on Shopify's slip, Order Printer, emails", ...each((p) => (p.allTemplates ? "✓" : "Packing slip only"))],

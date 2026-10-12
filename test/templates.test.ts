@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { planFeatures, planFromBillingName, PLANS } from "../app/lib/plans";
-import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, type SlipOptions } from "../app/lib/slip";
+import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, sanitizeDesign, type SlipOptions } from "../app/lib/slip";
 import { sampleSlipData } from "../app/lib/slip-sample";
 
 const { shop, order, weather } = sampleSlipData("2026-10-12", "Green Leaf Co");
@@ -66,5 +66,64 @@ describe("plans", () => {
     for (const id of ["FREE", "STARTER", "PRO"] as const) {
       expect(planFeatures(id).join(" ")).toContain(PLANS[id].ordersPerPeriod.toLocaleString("en-US"));
     }
+  });
+});
+
+describe("slip design", () => {
+  const withDesign = (design: Partial<import("../app/lib/slip").SlipDesign>, rest: Partial<SlipOptions> = {}) =>
+    render({ ...rest, design: { ...DEFAULT_SLIP_OPTIONS.design, ...design } });
+
+  it("only accepts logos from Shopify's CDN", () => {
+    expect(sanitizeDesign({ logoUrl: "https://evil.example/x.png" }).logoUrl).toBeNull();
+    expect(sanitizeDesign({ logoUrl: 'https://cdn.shopify.com/a.png" onerror="x' }).logoUrl).toBeNull();
+    expect(sanitizeDesign({ logoUrl: "https://cdn.shopify.com/s/files/logo.png" }).logoUrl).toBe(
+      "https://cdn.shopify.com/s/files/logo.png",
+    );
+  });
+
+  it("rejects bad colours and unknown values, keeps old font names working", () => {
+    const d = sanitizeDesign({ accent: "red; background:url(x)", fontSize: "HUGE", font: "serif" });
+    expect(d.accent).toBe("#111111");
+    expect(d.fontSize).toBe("M");
+    expect(d.font).toBe("georgia");
+  });
+
+  it("places the logo and applies title, note, accent and font", () => {
+    const html = withDesign({
+      logoUrl: "https://cdn.shopify.com/s/files/logo.png",
+      logoPosition: "center",
+      title: "Your order",
+      headerNote: "Open on arrival",
+      accent: "#1f6fdb",
+      font: "georgia",
+    });
+    expect(html).toContain('class="logo-center"');
+    expect(html).toContain("<h1>Your order</h1>");
+    expect(html).toContain("Open on arrival");
+    expect(html).toContain("--accent: #1f6fdb");
+    expect(html).toContain("Georgia");
+  });
+
+  it("switches weather parts, contact lines, item count and footer parts", () => {
+    const html = withDesign({
+      showWeather: false,
+      showEmail: true,
+      showPaymentStatus: true,
+      showStoreAddress: false,
+      footerExtra: "Returns within 30 days",
+    });
+    expect(html).not.toContain('class="day');
+    expect(html).toContain("Dispatch:"); // dates stay on their own
+    expect(html).toContain("jordan.lee@example.com");
+    expect(html).toContain("Payment:</strong> Paid");
+    expect(html).toContain("Order details · 3 items");
+    expect(html).not.toContain("12 Market Street");
+    expect(html).toContain("Returns within 30 days");
+  });
+
+  it("prints every paper format and both label sizes", () => {
+    expect(render({ paper: "A5" })).toContain("size: A5");
+    expect(render({ paper: "LEGAL" })).toContain("size: legal");
+    expect(withDesign({ labelSize: "4x4" }, { template: "LABEL_4X6" })).toContain("size: 4in 4in");
   });
 });

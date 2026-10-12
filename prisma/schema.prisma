@@ -47,7 +47,9 @@ enum SlipTemplate {
 
 enum PaperSize {
   A4
+  A5
   LETTER
+  LEGAL
 }
 
 enum TemperatureUnit {
@@ -88,6 +90,7 @@ model Shop {
   slipShowBilling Boolean      @default(true)
   slipShowNote    Boolean      @default(true)
   slipFooter      String? // null = default thank-you line, "" = none
+  slipDesign      Json? // logo, header/footer/weather toggles, colours — see SlipDesign in app/lib/slip.ts
 
   // Usage: orders that got a first snapshot in the current 30-day period.
   usagePeriodStart DateTime @default(now())
