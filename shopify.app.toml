@@ -1,0 +1,47 @@
+# PRODUCTION app config. Fill client_id / application_url with
+# `shopify app config link` once the Partner Dashboard app exists, and add a
+# shopify.app.staging.toml (separate app + client_id) before launch — never
+# share one client_id between environments (store-performance-monitor did,
+# and `shopify app dev` overwrote its production URLs).
+name = "Weather Slip"
+client_id = ""
+application_url = "https://example.com"
+embedded = true
+
+[build]
+# Must stay false: true lets `shopify app dev` silently replace the
+# production application_url with a throwaway tunnel for as long as the dev
+# session runs. Flip locally if you need it, never commit it as true.
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+# read_orders: order date, fulfillments and the shipping address's
+#   city/zip/country/coordinates (Level 2 protected customer data — request
+#   only the address field in the Partner Dashboard, not name/email/phone).
+# write_orders: metafieldsSet on Order needs it.
+# Shopify grants what's listed here, not what auth.begin asks for — a scope
+# change does nothing until `shopify app deploy` pushes this file.
+scopes = "read_orders,write_orders"
+
+[auth]
+redirect_urls = ["https://example.com/auth/callback"]
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/create", "orders/updated"]
+  uri = "/webhooks/orders"
+
+  # Mandatory for public apps.
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks/compliance"

@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Neon: DATABASE_URL = pooled (-pooler host) for the serverless runtime,
+  // DIRECT_URL = direct host for `prisma migrate`.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Managed by @shopify/shopify-app-session-storage-prisma — keep its shape.
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+}
+
+enum TemperatureUnit {
+  C
+  F
+  BOTH
+}
+
+model Shop {
+  shop        String    @id // myshop.myshopify.com
+  timezone    String    @default("UTC") // IANA, from shop.ianaTimezone
+  plan        Plan      @default(FREE)
+  installedAt DateTime  @default(now())
+  // Set on app/uninstalled; cleared on reinstall. shop/redact deletes the row.
+  uninstalledAt DateTime?
+
+  // Display
+  unit          TemperatureUnit @default(C)
+  showCurrent   Boolean         @default(true)
+  showDispatch  Boolean         @default(true)
+  showDelivery  Boolean         @default(true)
+  showPrecip    Boolean         @default(true)
+  showLocation  Boolean         @default(true)
+
+  // Dates
+  handlingDays Int     @default(1)
+  transitDays  Int     @default(3)
+  skipWeekends Boolean @default(true)
+
+  // Merchant's own weather API key (Pro), AES-256-GCM encrypted — see crypto.server.ts.
+  weatherApiKeyEnc String?
+
+  // Usage: orders that got a first snapshot in the current 30-day period.
+  usagePeriodStart DateTime @default(now())
+  usageCount       Int      @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  snapshots OrderWeatherSnapshot[]
+  jobs      WeatherJob[]
+}
+
+// Shared across shops: one forecast payload per rounded location. No PII —
+// only a ~11 km grid cell.
+model WeatherCache {
+  key       String   @id // provider:lat1:lon1
+  provider  String
+  payload   Json
+  fetchedAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+enum SnapshotStatus {
+  OK
+  PENDING_DATES // a dispatch/delivery date is beyond the forecast horizon
+  NO_LOCATION // order has no usable shipping address
+  LIMIT_REACHED
+  FAILED
+}
+
+// One row per version; the highest version per order is the live one and is
+// what the order metafield mirrors. Older versions are kept so a refresh
+// never silently loses what was printed before.
+model OrderWeatherSnapshot {
+  id          String         @id @default(cuid())
+  shop        String
+  orderId     String // numeric Shopify order ID
+  orderName   String // "#1001"
+  version     Int
+  status      SnapshotStatus
+  // Hash of the normalised destination — used to detect address changes
+  // without storing the address itself.
+  locationKey String?
+  city        String?
+  countryCode String?
+  dispatchDate String? // YYYY-MM-DD
+  deliveryDate String? // YYYY-MM-DD
+  payload     Json?
+  summary     String?
+  // Set once the order is fulfilled: no automatic recompute after this.
+  frozenAt    DateTime?
+  nextFillAt  DateTime? // when PENDING_DATES should be retried
+  createdAt   DateTime  @default(now())
+
+  shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@unique([shop, orderId, version])
+  @@index([shop, createdAt])
+  @@index([status, nextFillAt])
+}
+
+enum JobReason {
+  CREATE
+  ADDRESS_CHANGE
+  REFRESH
+  PENDING_FILL
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+// Postgres-backed queue: webhooks enqueue, scripts/worker.ts drains with
+// FOR UPDATE SKIP LOCKED. Holds only the order ID, never the order payload.
+model WeatherJob {
+  id        String    @id @default(cuid())
+  shop      String
+  orderId   String
+  reason    JobReason
+  status    JobStatus @default(PENDING)
+  attempts  Int       @default(0)
+  runAfter  DateTime  @default(now())
+  lockedAt  DateTime?
+  lastError String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([status, runAfter])
+  @@index([shop, orderId, status])
+}
