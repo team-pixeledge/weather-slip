@@ -199,7 +199,7 @@ export default function Orders() {
 
       <s-section padding="none">
         <s-table
-          paginate
+          paginate={pageInfo.hasNextPage || pageInfo.hasPreviousPage}
           hasNextPage={pageInfo.hasNextPage}
           hasPreviousPage={pageInfo.hasPreviousPage}
           loading={loading}
@@ -242,12 +242,17 @@ export default function Orders() {
               </s-button>
             </s-stack>
           ) : (
-            // One row like Shopify's: view picker, search filling the rest, date.
-            <s-grid
+            // One row like Shopify's: view picker, search filling the rest,
+            // date. Plain CSS grid — s-grid's container-query columns never
+            // applied inside the table's filter slot.
+            <div
               slot="filters"
-              gridTemplateColumns="@container (inline-size > 560px) 150px 1fr 170px, 1fr"
-              gap="small-300"
-              alignItems="center"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "140px minmax(0, 1fr) 160px",
+                gap: 8,
+                alignItems: "center",
+              }}
             >
               <s-select
                 label="View"
@@ -286,7 +291,7 @@ export default function Orders() {
                   </s-option>
                 ))}
               </s-select>
-            </s-grid>
+            </div>
           )}
 
           <s-table-header-row>
@@ -378,15 +383,41 @@ export default function Orders() {
           </s-table-body>
         </s-table>
         {rows.length === 0 && !loading && (
-          <s-box padding="base">
-            <s-paragraph>
-              {search
-                ? "No orders match your search."
+          // Empty state, like Shopify's Orders page.
+          <div style={{ padding: "48px 16px 56px", textAlign: "center" }}>
+            <svg width="64" height="64" viewBox="0 0 24 24" aria-hidden="true" style={{ marginBottom: 12 }}>
+              <path
+                d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"
+                fill="#f1f1f1"
+                stroke="#8a8a8a"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+              <path d="M4 7.5 12 12l8-4.5M12 12v9" fill="none" stroke="#8a8a8a" strokeWidth="1.2" strokeLinejoin="round" />
+            </svg>
+            <div style={{ fontSize: 16, fontWeight: 650, marginBottom: 4 }}>
+              {search || view !== "all" || range !== "any" ? "No orders found" : "No orders yet"}
+            </div>
+            <s-text color="subdued">
+              {search || view !== "all" || range !== "any"
+                ? "Try changing the filters or search term."
                 : allOrdersAccess
-                  ? "No orders to show here."
-                  : "No orders in the last 60 days. Older orders appear once \"Read all orders\" access is approved."}
-            </s-paragraph>
-          </s-box>
+                  ? "Orders will appear here as customers buy from your store."
+                  : "Shopify shows apps only the last 60 days of orders until “Read all orders” access is approved."}
+            </s-text>
+            {(search || view !== "all" || range !== "any") && (
+              <div style={{ marginTop: 12 }}>
+                <s-button
+                  onClick={() => {
+                    setQuery("");
+                    update({ q: null, view: null, range: null, after: null, before: null });
+                  }}
+                >
+                  Clear filters
+                </s-button>
+              </div>
+            )}
+          </div>
         )}
       </s-section>
     </s-page>
