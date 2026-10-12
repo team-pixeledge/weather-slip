@@ -91,7 +91,7 @@ export default function PackingSlip() {
       >
         Save
       </s-button>
-      <s-button slot="secondary-actions" href="/app/orders">
+      <s-button slot="secondary-actions" href="/app">
         Print from Orders
       </s-button>
 
@@ -173,7 +173,7 @@ export default function PackingSlip() {
 
       <s-section slot="aside" heading="Printing">
         <s-paragraph>
-          Print one slip or many from <s-link href="/app/orders">Orders</s-link>:
+          Print one slip or many from <s-link href="/app">Orders</s-link>:
           select orders, then Print packing slips. You can pick a different
           template there for a single print.
         </s-paragraph>

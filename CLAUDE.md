@@ -25,7 +25,7 @@ and deploy traps this app's config already avoids).
   Printer Pro all read `order.metafields.ns.key`. Snippets: `/app/snippets`.
 - **Weather only on print (user decision 2026-10-12).** New orders get
   nothing: `orders/create` isn't subscribed. The first print of a slip from
-  `/app/orders` fetches weather and enqueues a CREATE job that writes the
+  the Orders page (`/app`) fetches weather and enqueues a CREATE job that writes the
   metafield, so Shopify's own slip shows it from then on.
 - **Reprints never change by accident.** The first snapshot is written once
   per order; a duplicate CREATE is a no-op. Recompute only on: a real
@@ -59,7 +59,7 @@ and deploy traps this app's config already avoids).
 
 ## Orders page + printed packing slips (added 2026-10-12)
 
-`/app/orders` lists the shop's orders live from Shopify, laid out like
+The Orders page is the app home (`/app`, `rel="home"` in the nav, so the admin sidebar shows no separate Orders item; `/` and `/app/orders` redirect to it — there's no public landing page). It lists the shop's orders live from Shopify, laid out like
 Shopify's own Orders page on purpose (user request: familiar + compact):
 same tabs (All, Unfulfilled, Unpaid, Open, Archived), columns (Order, Date,
 Customer, Channel, Total, Payment/Fulfillment badges, Items, Delivery
@@ -122,7 +122,7 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
 ## Plans & billing (added 2026-10-12, reworked same day)
 
 `/app/plans` is also the app's overview (the Overview page was merged in;
-`/app` now redirects to `/app/orders`). Layout follows
+`/app` is the Orders list). Layout follows
 store-performance-monitor's `billing/select-plan`: current-plan card with
 usage, equal-height plan cards (active = green border, "Activated"), Free
 switch confirmed inline, "Compare all features" table.

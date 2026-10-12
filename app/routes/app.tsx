@@ -18,7 +18,12 @@ export default function App() {
   return (
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app/orders">Orders</s-link>
+        {/* rel="home" (App Bridge nav; missing from the React typings): the
+            app's home, Orders, opens from the app name in the admin
+            sidebar, with no separate "Orders" item. */}
+        <s-link href="/app" {...({ rel: "home" } as object)}>
+          Orders
+        </s-link>
         <s-link href="/app/slip">Packing slip</s-link>
         <s-link href="/app/plans">Plans &amp; pricing</s-link>
         <s-link href="/app/settings">Settings</s-link>

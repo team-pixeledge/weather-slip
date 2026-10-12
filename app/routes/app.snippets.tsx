@@ -64,7 +64,7 @@ export default function Snippets() {
     <s-page heading="Shopify templates">
       <s-banner tone="info">
         Optional. The easiest way to print is right here in the app — from{" "}
-        <s-link href="/app/orders">Orders</s-link>, one slip or many, using
+        <s-link href="/app">Orders</s-link>, one slip or many, using
         the templates in <s-link href="/app/slip">Packing slip</s-link>. Use
         this page only if you&apos;d rather keep printing from Shopify&apos;s
         own packing slip, Order Printer or order emails.
