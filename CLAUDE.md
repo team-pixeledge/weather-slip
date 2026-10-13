@@ -162,6 +162,25 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.
 
+## Distance on the slip (added 2026-10-13)
+
+`app/lib/distance.ts` (pure: haversine, km/mi/nmi formatting) +
+`distance.server.ts`. Settings live in `SlipDesign` (`showDistance`, off by
+default; `distanceUnit`; `distanceFrom` = `"order"` or a numeric Location
+id). Computed at every print, never stored, so moving an order to another
+location or editing its address changes the next print.
+- Origin = the order's fulfillment orders' assigned locations: live ones
+  (not CLOSED/CANCELLED; a moved FO is CANCELLED), else the CLOSED ones it
+  shipped from. A split order shows one distance per location. No visible
+  FO → store address (`shop.shopAddress`).
+- Coordinates from Shopify (location address, shipping address); missing →
+  `cachedGeocode` on city/zip (same cache as weather).
+- Straight line, labelled as such — not a route distance.
+- Needs `read_locations`, `read_merchant_managed_fulfillment_orders`,
+  `read_third_party_fulfillment_orders`; the origins query is separate
+  from the print query so a missing scope only falls back to the store
+  address, never breaks printing.
+
 ## Printing from Shopify's own Orders section (added 2026-10-12)
 
 Two admin print action extensions (one target each, as Shopify requires):

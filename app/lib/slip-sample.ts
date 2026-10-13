@@ -3,6 +3,7 @@
 // renderer the print tab uses. Dates are relative to today so the
 // forecast strip always looks current.
 import { addDays } from "./dates";
+import { haversineKm, type SlipDistance } from "./distance";
 import type { PrintOrder, PrintShop } from "./orders.server";
 import type { SlipWeather } from "./slip";
 
@@ -115,5 +116,9 @@ export function sampleSlipData(today: string, shopName: string) {
     horizonEnd: addDays(today, 4),
     asOf: `${today}T09:30:00Z`,
   };
-  return { shop, order, weather: new Map([["1", weather]]) };
+  // Ships from the store (Austin) to the customer (Denver).
+  const distance = new Map<string, SlipDistance[]>([
+    ["1", [{ status: "ok", km: haversineKm({ lat: 30.2672, lon: -97.7431 }, { lat: 39.7392, lon: -104.9903 }), from: "Austin, US" }]],
+  ]);
+  return { shop, order, weather: new Map([["1", weather]]), distance };
 }

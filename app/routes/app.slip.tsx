@@ -31,13 +31,19 @@ import {
   type SlipOptions,
 } from "../lib/slip";
 import { sampleSlipData } from "../lib/slip-sample";
+import { DISTANCE_UNITS, type DistanceUnit } from "../lib/distance";
+import { listLocations } from "../lib/distance.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
   // Fresh on every visit, so a logo changed in Settings → Brand shows here.
-  const brandLogoUrl = await refreshBrandLogo(admin, shop);
+  const [brandLogoUrl, locations] = await Promise.all([
+    refreshBrandLogo(admin, shop),
+    listLocations(admin),
+  ]);
   return {
+    locations,
     options: slipOptions(shop),
     brandLogoUrl,
     unit: shop.unit,
@@ -100,7 +106,7 @@ export default function PackingSlip() {
     [o, loaded.brandLogoUrl],
   );
   const preview = useMemo(() => {
-    const { shop, order, weather } = sampleSlipData(
+    const { shop, order, weather, distance } = sampleSlipData(
       loaded.today,
       loaded.shopName,
     );
@@ -111,6 +117,7 @@ export default function PackingSlip() {
       chrome: false,
       autoPrint: false,
       slip: previewOptions,
+      distance,
     });
   }, [previewOptions, loaded.today, loaded.shopName, loaded.unit]);
 
@@ -543,6 +550,51 @@ export default function PackingSlip() {
                 {flag("showRain", "Chance of rain", !d.showWeather)}
                 {flag("showAsOf", "“Forecast as of” time", !d.showWeather)}
                 {flag("showDates", "Dispatch and delivery dates")}
+              </s-stack>
+            </s-section>
+
+            <s-section heading="Distance">
+              <s-stack direction="block" gap="base">
+                {flag("showDistance", "Distance from the fulfillment location to the customer")}
+                <s-select
+                  label="Unit"
+                  value={d.distanceUnit}
+                  disabled={!d.showDistance}
+                  onChange={(e) =>
+                    setD({ distanceUnit: e.currentTarget.value as DistanceUnit })
+                  }
+                >
+                  {DISTANCE_UNITS.map((u) => (
+                    <s-option key={u.id} value={u.id}>
+                      {u.label}
+                    </s-option>
+                  ))}
+                </s-select>
+                <s-select
+                  label="Measure from"
+                  value={d.distanceFrom}
+                  disabled={!d.showDistance}
+                  details={
+                    loaded.locations
+                      ? "Each order's own location follows Shopify: change an order's fulfillment location and the next print updates."
+                      : "Approve location access when Shopify asks (reopen the app) to pick a specific location."
+                  }
+                  onChange={(e) => setD({ distanceFrom: e.currentTarget.value })}
+                >
+                  <s-option value="order">
+                    The order&apos;s fulfillment location (recommended)
+                  </s-option>
+                  {(loaded.locations ?? []).map((l) => (
+                    <s-option key={l.id} value={l.id}>
+                      {l.place ? `${l.name} — ${l.place}` : l.name}
+                    </s-option>
+                  ))}
+                </s-select>
+                <s-paragraph>
+                  Straight-line distance (as the crow flies), not the driving
+                  route. Without a location it&apos;s measured from your store
+                  address.
+                </s-paragraph>
               </s-stack>
             </s-section>
 

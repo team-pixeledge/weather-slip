@@ -5,6 +5,7 @@
 import { addDays, shortDay, type IsoDate } from "./dates";
 import { cToF, type Unit } from "./format";
 import { weatherIcon } from "./weather-icons";
+import { DISTANCE_UNITS, formatDistance, type DistanceUnit, type SlipDistance } from "./distance";
 import type { PrintAddress, PrintOrder, PrintShop } from "./orders.server";
 import type { ForecastPayload } from "./weather/types";
 
@@ -324,6 +325,11 @@ export interface SlipDesign {
   itemSort: "order" | "name" | "sku";
   /** Cart attributes (gift message, delivery instructions…). */
   showCartAttributes: boolean;
+  /** Straight-line distance from the fulfillment location to the destination. */
+  showDistance: boolean;
+  distanceUnit: DistanceUnit;
+  /** "order" = each order's assigned fulfillment location; else a numeric Location id. */
+  distanceFrom: string;
   /** Extra footer text (returns policy, care notes); line breaks kept. */
   footerExtra: string | null;
   accent: string; // #rrggbb
@@ -369,6 +375,9 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   itemsScope: "unfulfilled",
   itemSort: "order",
   showCartAttributes: true,
+  showDistance: false,
+  distanceUnit: "km",
+  distanceFrom: "order",
   footerExtra: null,
   accent: "#111111",
   font: "system",
@@ -468,6 +477,15 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     itemsScope: pick("itemsScope", ["unfulfilled", "all"] as const),
     itemSort: pick("itemSort", ["order", "name", "sku"] as const),
     showCartAttributes: bool("showCartAttributes"),
+    showDistance: bool("showDistance"),
+    distanceUnit: pick(
+      "distanceUnit",
+      DISTANCE_UNITS.map((u) => u.id),
+    ),
+    distanceFrom:
+      typeof r.distanceFrom === "string" && /^(order|\d{1,20})$/.test(r.distanceFrom)
+        ? r.distanceFrom
+        : d.distanceFrom,
     footerExtra: text("footerExtra"),
     accent:
       typeof r.accent === "string" && /^#[0-9a-f]{6}$/i.test(r.accent)
@@ -925,9 +943,22 @@ const noteHtml = (order: PrintOrder, o: SlipOptions) =>
     ? `<div class="note"><h3>Order note</h3><p>${escapeHtml(order.note)}</p></div>`
     : "";
 
+/** "Distance: 1,234 km from Austin, US" (one per shipping location). */
+function distanceHtml(list: SlipDistance[] | undefined, d: SlipDesign): string {
+  if (!d.showDistance || !list?.length) return "";
+  const ok = list.filter((x): x is Extract<SlipDistance, { status: "ok" }> => x.status === "ok");
+  const body = ok.length
+    ? ok
+        .map((x) => `${escapeHtml(formatDistance(x.km, d.distanceUnit))}${x.from ? ` from ${escapeHtml(x.from)}` : ""}`)
+        .join(" · ")
+    : `<span class="muted">not available</span>`;
+  return `<p class="distance"><strong>Distance:</strong> ${body}${ok.length ? ` <span class="muted">(straight line)</span>` : ""}</p>`;
+}
+
 interface PageCtx {
   shop: PrintShop;
   weather: SlipWeather | undefined;
+  distance: SlipDistance[] | undefined;
   unit: Unit;
   timeZone: string;
   o: SlipOptions;
@@ -970,6 +1001,7 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
         ${o.showBilling ? `<div><h3>Bill to</h3>${addressHtml(order.billingAddress, null, d.showPhone)}</div>` : ""}
       </div>
       ${contactHtml(order, d)}
+      ${distanceHtml(c.distance, d)}
       ${weather ? `<hr>${weather}` : ""}
       <hr>
       <h3>Order details${d.showItemCount ? ` · ${itemCount(order, d)} ${itemCount(order, d) === 1 ? "item" : "items"}` : ""}</h3>
@@ -1005,6 +1037,7 @@ function labelPage(order: PrintOrder, c: PageCtx): string {
         ${d.showShippingMethod && order.shippingLine ? `<p class="muted">${escapeHtml(order.shippingLine.title)}</p>` : ""}
       </div>
       ${contactHtml(order, d)}
+      ${distanceHtml(c.distance, d)}
       ${weatherTable(c.weather, c.unit, c.timeZone, true, d)}
       <h3>Items${d.showItemCount ? ` (${itemCount(order, d)})` : ""}</h3>
       <ul class="lines">${items}</ul>
@@ -1075,6 +1108,7 @@ const BASE_STYLES = `
   .note { margin-top: 12px; padding: 8px; border: 1px solid #ddd; background: #fafafa; }
   footer { margin-top: 24px; text-align: center; font-size: 11px; }
   .thanks { margin-bottom: 8px; }
+  .distance { margin-top: 8px; }
   .ws-mark { display: none; position: fixed; left: 0; right: 0; justify-content: center; align-items: center;
              gap: 5px; font-size: 9px; color: #888; }
   .ws-mark svg { width: 14px; height: 14px; }
@@ -1112,6 +1146,7 @@ const LABEL_STYLES = `
   ul.lines li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted #999; padding: 2px 0; }
   .note { margin-top: 6px; padding: 4px; background: none; border: 1px solid #111; }
   .thanks { margin-top: 6px; text-align: center; font-size: 9px; }
+  .distance { margin: 4px 0; }
   @page { size: 4in 6in; margin: 0; }
   @media print { .page { padding: 0.15in; width: 4in; } }
 `;
@@ -1220,6 +1255,8 @@ export interface SlipRenderOptions {
   autoPrint?: boolean;
   chrome?: boolean;
   slip?: SlipOptions;
+  /** Keyed by numeric order ID; only read when design.showDistance. */
+  distance?: Map<string, SlipDistance[]>;
 }
 
 export function renderPackingSlips(
@@ -1235,6 +1272,7 @@ export function renderPackingSlips(
       const ctx: PageCtx = {
         shop,
         weather: weather.get(id),
+        distance: opts.distance?.get(id),
         unit: opts.unit,
         timeZone: opts.timeZone,
         o,

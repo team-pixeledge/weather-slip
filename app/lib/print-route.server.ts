@@ -11,6 +11,7 @@ import { brandLogoIfFresh } from "./brand-logo.server";
 import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, resolveLogo } from "./slip";
 import { slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
+import { distancesForSlips } from "./distance.server";
 
 // These pages carry customer names and addresses: never cache them, never
 // leak the URL (it holds the print token) in a Referer, never let them be
@@ -103,7 +104,10 @@ async function renderPrint(
     if (isSlipTemplate(tpl)) slip.template = tpl;
     const brandLogo = slip.design.logoSource === "store" ? await brandLogoIfFresh(admin, shop) : null;
     slip.design = resolveLogo(slip.design, brandLogo);
-    html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip });
+    const distance = slip.design.showDistance
+      ? await distancesForSlips(shop, orders, admin, slip.design.distanceFrom)
+      : undefined;
+    html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip, distance });
   }
   return new Response(html, { headers: securityHeaders(nonce, opts.frameAncestors) });
 }
