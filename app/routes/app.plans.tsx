@@ -126,6 +126,57 @@ export const action = async ({
 const untyped = (props: Record<string, string>) => props as object;
 const FILL = untyped({ inlineSize: "fill" });
 
+const CARD = {
+  background: "#fff",
+  borderRadius: 12,
+  border: "1px solid #e3e3e3",
+  boxShadow: "0 1px 3px rgba(0,0,0,.08)",
+  padding: 16,
+} as const;
+
+const FAQ: [string, string][] = [
+  [
+    "What counts as an order?",
+    "An order counts once, the first time its packing slip is printed with weather. Reprints are always free, and orders you never print never count. The weather is saved on the order, so every reprint shows exactly the same forecast.",
+  ],
+  [
+    "What happens when I reach my plan's limit?",
+    "Slips still print — just without the weather — until your monthly count resets or you upgrade. Orders already printed with weather keep it.",
+  ],
+  [
+    "When does my monthly count reset?",
+    "Every 30 days from when you installed the app. The date is shown in the Current plan box above.",
+  ],
+  [
+    "How do upgrading and downgrading work?",
+    "Choose a plan and approve the charge on Shopify's screen; the new plan starts straight away and Shopify prorates the difference, so you're never charged twice for the same days. If you don't approve, nothing changes.",
+  ],
+  [
+    "How do I cancel or go back to Free?",
+    "Click “Switch to Free” on the Free card. Your paid subscription is cancelled in Shopify right away and unused time is credited. You can upgrade again any time.",
+  ],
+  [
+    "How is billing handled?",
+    "All charges go through Shopify and appear on your regular Shopify invoice, billed every 30 days. Development stores only ever get free test charges.",
+  ],
+  [
+    "Where does the weather come from, and how far ahead?",
+    "Forecasts come from OpenWeather for the order's shipping city. The slip shows today plus the next 4 days at the destination, with the dispatch and delivery days marked. If the delivery day is further out, the slip says so.",
+  ],
+  [
+    "Which printers and paper sizes work?",
+    "Any printer your browser can print to. Choose A4, A5, US Letter or US Legal for full slips, or the Shipping label template for 4×6 or 4×4 thermal label printers.",
+  ],
+  [
+    "What customer data does the app keep?",
+    "None of your customers' names, street addresses, phone numbers or emails are stored — they're read from Shopify only while printing. The app keeps the city, country and the forecast for each printed order.",
+  ],
+  [
+    "Can I use my own OpenWeather API key?",
+    "Yes, on the Business plan: add it in Settings → Weather API. If your key ever stops working, the app falls back to its own so slips keep printing.",
+  ],
+];
+
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
     day: "numeric",
@@ -452,6 +503,81 @@ export default function Plans() {
               </div>
             );
           })}
+        </div>
+        {/* ---- How to use + FAQ ---- */}
+        <div style={CARD}>
+          <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 8 }}>
+            How to use Weather Slip
+          </div>
+          <ol
+            style={{
+              margin: 0,
+              paddingLeft: 20,
+              display: "grid",
+              gap: 6,
+              fontSize: 13,
+            }}
+          >
+            <li>
+              <strong>Print from Orders.</strong> Open{" "}
+              <s-link href="/app">Orders</s-link>, tick one or more orders and
+              click <em>Print packing slips</em> — or <em>Print slip</em> on a
+              single row. The slip opens in a new tab; print it or save it as
+              PDF.
+            </li>
+            <li>
+              <strong>Make it yours.</strong> In{" "}
+              <s-link href="/app/slip">Packing slip</s-link> pick a template
+              (Classic, Minimal, Detailed or Shipping label) and set your logo,
+              colours, fonts, line items and footer. The preview updates as you
+              go.
+            </li>
+            <li>
+              <strong>Or print from Shopify.</strong> In Shopify&apos;s own
+              Orders page select orders → <em>Print</em> → <em>Weather slip</em>
+              , or open an order → <em>More actions</em> → <em>Print</em> →{" "}
+              <em>Weather slip</em>.
+            </li>
+            <li>
+              <strong>Shipping days.</strong> In{" "}
+              <s-link href="/app/settings">Settings</s-link> set your handling
+              and transit days so the dispatch and delivery days on the slip are
+              right.
+            </li>
+            <li>
+              <strong>Optional:</strong> add the weather line to Shopify&apos;s
+              own packing slip or Order Printer from{" "}
+              <s-link href="/app/snippets">Shopify templates</s-link>.
+            </li>
+          </ol>
+        </div>
+
+        <div style={CARD}>
+          <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 4 }}>
+            FAQ
+          </div>
+          {FAQ.map(([q, a]) => (
+            <details
+              key={q}
+              style={{ borderTop: "1px solid #ebebeb", padding: "10px 0" }}
+            >
+              <summary
+                style={{ cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+              >
+                {q}
+              </summary>
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 13,
+                  color: "#4a4a4a",
+                  lineHeight: 1.5,
+                }}
+              >
+                {a}
+              </div>
+            </details>
+          ))}
         </div>
       </div>
     </s-page>
