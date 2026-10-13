@@ -93,7 +93,11 @@ export class OpenWeatherProvider implements WeatherProvider {
    * keys on one account share a quota, and spreading load across accounts
    * to dodge limits risks suspension. The job retries with backoff instead.
    */
-  constructor(private readonly keys: string[]) {
+  constructor(
+    private readonly keys: string[],
+    /** Monitoring hook: every attempt's HTTP status (or "timeout"). */
+    private readonly onCall?: (path: string, status: number | "timeout") => void,
+  ) {
     if (keys.length === 0) throw new Error("No OpenWeather API key configured");
   }
 
@@ -103,7 +107,14 @@ export class OpenWeatherProvider implements WeatherProvider {
       const url = new URL(path, BASE);
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
       url.searchParams.set("appid", key);
-      const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      let res: Response;
+      try {
+        res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      } catch (err) {
+        this.onCall?.(path, "timeout");
+        throw err;
+      }
+      this.onCall?.(path, res.status);
       if (res.ok) return (await res.json()) as T;
       lastError = new HttpError(res.status, path);
       if (res.status !== 401) break;

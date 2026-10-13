@@ -208,3 +208,29 @@ model WeatherJob {
   @@index([status, runAfter])
   @@index([shop, orderId, status])
 }
+
+// ---- Operator monitoring (alerts.server.ts) ----
+
+// One row per alert kind: throttles emails to the operator (at most one per
+// kind per hour) and counts how often it fired meanwhile.
+model AdminAlert {
+  key         String   @id
+  lastSentAt  DateTime
+  suppressed  Int      @default(0) // fired again within the throttle window
+  lastMessage String?
+}
+
+// Outbound calls per provider per month ("openweather:2026-10"), to warn
+// before the free allowance runs out.
+model ApiUsage {
+  id         String   @id
+  count      Int      @default(0)
+  alertedPct Int      @default(0) // highest threshold already emailed
+  updatedAt  DateTime @updatedAt
+}
+
+// "Last seen alive" times, e.g. the 10-minute queue drain.
+model Heartbeat {
+  key String   @id
+  at  DateTime
+}

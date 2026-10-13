@@ -25,6 +25,7 @@ import {
   type PlanId,
 } from "../lib/plans";
 import { ensureShop } from "../lib/shop.server";
+import { notifyAdmin } from "../lib/alerts.server";
 
 // Plans & pricing — also the app's usage overview (the old Overview page was
 // merged in here). Layout follows store-performance-monitor's select-plan.
@@ -112,6 +113,11 @@ export const action = async ({
     console.error(
       "[plans] plan change failed",
       err instanceof Error ? err.message : err,
+    );
+    await notifyAdmin(
+      "billing-failed",
+      "A plan change failed",
+      `Shop: ${session.shop}\nTarget plan: ${target}\n\n${err instanceof Error ? err.message : String(err)}`,
     );
     return {
       ok: false,

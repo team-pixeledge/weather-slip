@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { METAFIELD_FORECAST_KEY, METAFIELD_NAMESPACE } from "./constants";
 import { enqueue } from "./jobs.server";
 import { cacheKey } from "./location";
+import { notifyAdminLater } from "./alerts.server";
 import { orderShippingDates } from "./order-weather.server";
 import { query, type GraphqlClient, type PrintOrder } from "./orders.server";
 import { countOrder, providerFor } from "./shop.server";
@@ -145,6 +146,11 @@ export async function weatherForSlips(
         fresh.push([id, w]);
       } catch (err) {
         console.error("[slip-weather]", id, err instanceof Error ? err.message : err);
+        notifyAdminLater(
+          "slip-weather-failed",
+          "Slips are printing without weather",
+          `Weather lookup failed while printing order ${id} on ${shop.shop}: ${err instanceof Error ? err.message : String(err)}`,
+        );
         out.set(id, { status: "error", ...place, dispatch, delivery });
       }
     }),

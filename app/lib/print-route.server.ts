@@ -5,6 +5,7 @@ import { runInBackground } from "./background.server";
 import { MAX_PRINT_ORDERS } from "./order-views";
 import { ordersToPrint } from "./orders.server";
 import { verifyPrintToken } from "./print-token.server";
+import { notifyAdmin } from "./alerts.server";
 import { drainQueue } from "./queue-runner.server";
 import { brandLogoIfFresh } from "./brand-logo.server";
 import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, resolveLogo } from "./slip";
@@ -54,6 +55,21 @@ export function parseOrderIds(raw: string | null): string[] {
     .slice(0, MAX_PRINT_ORDERS);
 }
 
+/** renderPrint, but a crash becomes an operator alert and a readable error page. */
+async function safeRenderPrint(...args: Parameters<typeof renderPrint>): Promise<Response> {
+  try {
+    return await renderPrint(...args);
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n\n${err.stack ?? ""}` : String(err);
+    await notifyAdmin(
+      "print-failed",
+      "Printing a packing slip failed",
+      `Shop: ${args[0]}\nOrders: ${args[1].join(", ")}\nKind: ${args[2]}\n\n${msg.slice(0, 3000)}`,
+    );
+    return message(500, "Something went wrong while preparing this print. We've been notified — please try again in a minute.");
+  }
+}
+
 /** The printable document for a shop's orders (shop already authorised). */
 async function renderPrint(
   shopDomain: string,
@@ -99,7 +115,7 @@ export async function printResponse(request: Request, kind: PrintKind) {
   if (!shopDomain) {
     return message(401, "This print link has expired. Go back to Weather Slip in your Shopify admin and print again.");
   }
-  return renderPrint(shopDomain, parseOrderIds(url.searchParams.get("ids")), kind, url.searchParams.get("tpl"), {
+  return safeRenderPrint(shopDomain, parseOrderIds(url.searchParams.get("ids")), kind, url.searchParams.get("tpl"), {
     autoPrint: true,
     chrome: true,
   });
@@ -113,7 +129,7 @@ export async function printResponse(request: Request, kind: PrintKind) {
  */
 export function adminPrintResponse(shopDomain: string, url: URL): Promise<Response> {
   const kind: PrintKind = url.searchParams.get("kind") === "customers" ? "customers" : "slips";
-  return renderPrint(shopDomain, parseOrderIds(url.searchParams.get("ids")), kind, url.searchParams.get("tpl"), {
+  return safeRenderPrint(shopDomain, parseOrderIds(url.searchParams.get("ids")), kind, url.searchParams.get("tpl"), {
     autoPrint: false,
     chrome: false,
     frameAncestors: "https://admin.shopify.com https://*.myshopify.com",

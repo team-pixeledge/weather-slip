@@ -7,6 +7,31 @@ import { sanitizeDesign, type SlipOptions } from "./slip";
 import { OpenMeteoProvider } from "./weather/open-meteo.server";
 import { OpenWeatherProvider } from "./weather/openweather.server";
 import type { WeatherProvider } from "./weather/types";
+import { notifyAdminLater, OPENWEATHER_FREE_MONTHLY, recordApiCall } from "./alerts.server";
+
+/** Count every OpenWeather call and alert the operator on failures. */
+function watchOpenWeather(path: string, status: number | "timeout") {
+  void recordApiCall("openweather", OPENWEATHER_FREE_MONTHLY);
+  if (status === 401) {
+    notifyAdminLater(
+      "openweather:401",
+      "OpenWeather rejected an API key",
+      `A call to ${path} returned 401. A key in OPENWEATHER_API_KEYS (or a Business merchant's own key) is invalid, revoked or not yet active. The next key in the list is tried; if none work, weather lookups fail.`,
+    );
+  } else if (status === 429) {
+    notifyAdminLater(
+      "openweather:429",
+      "OpenWeather rate limit hit",
+      `A call to ${path} returned 429 (too many requests — the free plan allows 60/minute and 1,000,000/month). Weather lookups are failing until the limit clears; jobs retry with backoff.`,
+    );
+  } else if (status === "timeout" || status >= 500) {
+    notifyAdminLater(
+      "openweather:down",
+      "OpenWeather is failing",
+      `A call to ${path} ${status === "timeout" ? "timed out" : `returned ${status}`}. If this continues, slips print without weather until OpenWeather recovers.`,
+    );
+  }
+}
 
 type Db = typeof prisma | Prisma.TransactionClient;
 
@@ -69,7 +94,10 @@ export function providerFor(shop: Shop): WeatherProvider {
   if (process.env.WEATHER_PROVIDER === "open-meteo") {
     return new OpenMeteoProvider(own ?? (process.env.OPEN_METEO_API_KEY || null));
   }
-  return new OpenWeatherProvider([...(own ? [own] : []), ...envKeys("OPENWEATHER_API_KEYS")]);
+  return new OpenWeatherProvider(
+    [...(own ? [own] : []), ...envKeys("OPENWEATHER_API_KEYS")],
+    watchOpenWeather,
+  );
 }
 
 /**

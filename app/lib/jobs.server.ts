@@ -1,5 +1,6 @@
 import type { JobReason, WeatherJob } from "@prisma/client";
 import prisma from "../db.server";
+import { notifyAdmin } from "./alerts.server";
 
 const MAX_ATTEMPTS = 5;
 const STALE_LOCK_MS = 10 * 60 * 1000;
@@ -62,6 +63,13 @@ export async function failJob(job: WeatherJob, error: unknown, now = new Date())
       runAfter: new Date(now.getTime() + 2 ** job.attempts * 60_000),
     },
   });
+  if (done) {
+    await notifyAdmin(
+      "job-failed",
+      "An order's weather couldn't be saved",
+      `Job ${job.id} (${job.reason}) for order ${job.orderId} on ${job.shop} failed ${job.attempts} times and gave up.\n\nLast error: ${message}`,
+    );
+  }
 }
 
 /** Queue a fill for every snapshot whose pending date has entered the forecast window. */

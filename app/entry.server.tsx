@@ -5,6 +5,24 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { notifyAdminLater } from "./lib/alerts.server";
+
+/**
+ * Unexpected errors from any loader/action/render → operator alert
+ * (throttled per message). Aborted requests are the browser navigating
+ * away, not breakage.
+ */
+export function handleError(error: unknown, { request }: { request: Request }) {
+  if (request.signal.aborted) return;
+  console.error(error);
+  const msg = error instanceof Error ? error.message : String(error);
+  const path = new URL(request.url).pathname;
+  notifyAdminLater(
+    `server-error:${path}:${msg.slice(0, 80)}`,
+    `Server error on ${path}`,
+    `${request.method} ${path}\n\n${error instanceof Error ? (error.stack ?? msg) : msg}`.slice(0, 4000),
+  );
+}
 
 export const streamTimeout = 5000;
 

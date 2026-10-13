@@ -198,6 +198,21 @@ switch confirmed inline, "Compare all features" table.
   development stores (`shop.plan.partnerDevelopment`). A test subscription
   only unlocks a plan in those same conditions.
 
+## Operator alerts (added 2026-10-13)
+
+`alerts.server.ts` emails the operator (SMTP via nodemailer; env
+`ALERT_EMAIL_TO/FROM`, `SMTP_HOST/PORT/USER/PASS`; unset = log only).
+`notifyAdmin(key, …)` sends at most once per key per hour (`AdminAlert`
+row counts suppressed repeats). Triggers: OpenWeather 401/429/5xx/timeout
+(hook passed into `OpenWeatherProvider`), monthly OpenWeather usage at
+50/80/95/100% of 1M (`ApiUsage`, threshold claimed atomically — a jump
+emails only the highest crossed), a job failing for good, a print
+crashing (`safeRenderPrint` → friendly 500), a plan change failing, slip
+weather failing, any loader/action error (`handleError` in entry.server),
+and the 10-minute GitHub drain stopping (`Heartbeat`; checked by Vercel's
+daily cron, recognised by its `vercel-cron` user agent). Monitoring never
+throws.
+
 ## Weather providers
 
 `WeatherProvider` interface (`app/lib/weather/types.ts`); labels come from
