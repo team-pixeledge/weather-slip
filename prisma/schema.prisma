@@ -36,6 +36,7 @@ enum Plan {
   FREE
   STARTER
   PRO
+  BUSINESS
 }
 
 enum SlipTemplate {

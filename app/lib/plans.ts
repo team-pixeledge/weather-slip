@@ -1,7 +1,7 @@
 // Plan limits and prices live here, and only here: shopify.server.ts builds
 // the Billing API config from PLANS, and the Plans page renders from it.
 // Plans count orders printed with weather (once per order), not API calls.
-export type PlanId = "FREE" | "STARTER" | "PRO";
+export type PlanId = "FREE" | "STARTER" | "PRO" | "BUSINESS";
 
 export interface PlanLimits {
   name: string;
@@ -40,18 +40,27 @@ export const PLANS: Record<PlanId, PlanLimits> = {
   PRO: {
     name: "Pro",
     priceUsd: 9.99,
-    ordersPerPeriod: 3000,
+    ordersPerPeriod: 2000,
+    allTemplates: true,
+    dispatchForecast: true,
+    ownApiKey: false,
+    tagline: "For busy shops shipping in volume.",
+  },
+  BUSINESS: {
+    name: "Business",
+    priceUsd: 19.99,
+    ordersPerPeriod: 5000,
     allTemplates: true,
     dispatchForecast: true,
     ownApiKey: true,
-    tagline: "For high-volume shops.",
+    tagline: "For high-volume brands that want their own weather key.",
   },
 };
 
-export const PLAN_ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
-export const PAID_PLANS: PlanId[] = ["STARTER", "PRO"];
+export const PLAN_ORDER: PlanId[] = ["FREE", "STARTER", "PRO", "BUSINESS"];
+export const PAID_PLANS: PlanId[] = ["STARTER", "PRO", "BUSINESS"];
 
-/** The Billing API subscription name for a paid plan ("Starter", "Pro"). */
+/** The Billing API subscription name for a paid plan ("Starter", "Pro", "Business"). */
 export const billingName = (id: PlanId) => PLANS[id].name;
 
 export function planFromBillingName(name: string): PlanId | null {
@@ -73,7 +82,8 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
     { text: "Store logo, fonts, colours, paper sizes", included: true },
     { text: "Forecast for every day to delivery", included: true },
     { text: "Dispatch-day forecast in saved weather", included: p.dispatchForecast },
-    { text: "Weather on Shopify slip, Order Printer & emails", included: p.allTemplates },
+    { text: "Weather on Shopify's own packing slip", included: true },
+    { text: "Order Printer & Order Printer Pro setup", included: p.allTemplates },
     { text: "Use your own OpenWeather API key", included: p.ownApiKey },
   ];
 }

@@ -10,7 +10,7 @@ changes; don't let it drift.
 Shopify **public** embedded app: saves destination weather (current +
 dispatch-day + delivery-day forecast) on each order as order metafields, so
 packing slips, invoices and emails can print it with one Liquid line.
-Free / Starter $4.99 / Pro $9.99 (`app/lib/plans.ts`). Scaffolded 2026-10-12
+Free (30 orders) / Starter $4.99 (500) / Pro $9.99 (2,000) / Business $19.99 (5,000, own OpenWeather key) — `app/lib/plans.ts` (2026-10-13). Scaffolded 2026-10-12
 from `Shopify/shopify-app-template-react-router` (React Router 7, Prisma,
 Polaris web components). Sibling app for conventions/lessons:
 `../store-performance-monitor` (its CLAUDE.md documents several Shopify CLI

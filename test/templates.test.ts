@@ -58,20 +58,25 @@ describe("plans", () => {
   it("lists every feature on every card, marking what's included", () => {
     const free = planFeatures("FREE");
     const pro = planFeatures("PRO");
-    expect(free.length).toBe(pro.length);
+    const business = planFeatures("BUSINESS");
+    expect(free.length).toBe(business.length);
     expect(free.find((f) => f.text.includes("own OpenWeather"))!.included).toBe(false);
-    expect(pro.every((f) => f.included)).toBe(true);
+    expect(pro.find((f) => f.text.includes("own OpenWeather"))!.included).toBe(false);
+    expect(business.every((f) => f.included)).toBe(true);
+    // Free stores do get weather on Shopify's own packing slip.
+    expect(free.find((f) => f.text.includes("Shopify's own packing slip"))!.included).toBe(true);
   });
 
   it("maps Billing API names back to plans", () => {
     expect(planFromBillingName("Starter")).toBe("STARTER");
     expect(planFromBillingName("Pro")).toBe("PRO");
+    expect(planFromBillingName("Business")).toBe("BUSINESS");
     expect(planFromBillingName("Free")).toBeNull();
     expect(planFromBillingName("Something else")).toBeNull();
   });
 
   it("each card lists its own order allowance", () => {
-    for (const id of ["FREE", "STARTER", "PRO"] as const) {
+    for (const id of ["FREE", "STARTER", "PRO", "BUSINESS"] as const) {
       expect(planFeatures(id)[0]!.text).toContain(PLANS[id].ordersPerPeriod.toLocaleString("en-US"));
     }
   });

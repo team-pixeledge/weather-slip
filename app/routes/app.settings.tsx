@@ -198,7 +198,7 @@ export default function Settings() {
           "showDispatch",
           loaded.plan.dispatchForecast
             ? "Dispatch-day forecast"
-            : "Dispatch-day forecast (Starter and Pro)",
+            : "Dispatch-day forecast (paid plans)",
           !loaded.plan.dispatchForecast,
         )}
         {toggle("showDelivery", "Delivery-day forecast")}
@@ -288,7 +288,8 @@ export default function Settings() {
           </s-stack>
         ) : (
           <s-paragraph>
-            Weather is included in your plan. Pro can use its own API key.
+            Weather is included in your plan. The Business plan can use its own OpenWeather
+            API key.
           </s-paragraph>
         )}
       </s-section>

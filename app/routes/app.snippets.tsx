@@ -82,7 +82,7 @@ export default function Snippets() {
       {TARGETS.map((t) => (
         <s-section key={t.id} heading={t.title}>
           {t.paid && !allTemplates ? (
-            <s-paragraph>Available on Starter and Pro.</s-paragraph>
+            <s-paragraph>Available on paid plans (Starter, Pro and Business).</s-paragraph>
           ) : (
             <s-paragraph>{t.steps}</s-paragraph>
           )}
