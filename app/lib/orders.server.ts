@@ -79,6 +79,7 @@ const LIST_QUERY = `#graphql
         id
         name
         createdAt
+        cancelledAt
         displayFinancialStatus
         displayFulfillmentStatus
         currentSubtotalLineItemsQuantity
@@ -100,6 +101,7 @@ interface ListData {
       id: string;
       name: string;
       createdAt: string;
+      cancelledAt: string | null;
       displayFinancialStatus: string | null;
       displayFulfillmentStatus: string;
       currentSubtotalLineItemsQuantity: number;
@@ -136,6 +138,7 @@ export interface OrderRow {
   currency: string;
   financialStatus: string | null;
   fulfillmentStatus: string;
+  cancelled: boolean;
   shippingMethod: string | null;
   channel: string | null;
   tags: string[];
@@ -174,6 +177,7 @@ export async function listOrders(
       currency: o.totalPriceSet.shopMoney.currencyCode,
       financialStatus: o.displayFinancialStatus,
       fulfillmentStatus: o.displayFulfillmentStatus,
+      cancelled: o.cancelledAt != null,
       shippingMethod: o.shippingLine?.title ?? null,
       channel: o.app?.name ?? o.sourceName ?? null,
       tags: o.tags,

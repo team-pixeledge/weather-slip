@@ -395,9 +395,12 @@ export default function Orders() {
                     )}
                   </s-table-cell>
                   <s-table-cell>
-                    <s-badge tone={ful?.tone ?? "neutral"}>
-                      {ful?.label ?? humanise(r.fulfillmentStatus)}
-                    </s-badge>
+                    <s-stack direction="inline" gap="small-200">
+                      {r.cancelled && <s-badge tone="critical">Cancelled</s-badge>}
+                      <s-badge tone={ful?.tone ?? "neutral"}>
+                        {ful?.label ?? humanise(r.fulfillmentStatus)}
+                      </s-badge>
+                    </s-stack>
                   </s-table-cell>
                   <s-table-cell>
                     {r.itemCount} {r.itemCount === 1 ? "item" : "items"}

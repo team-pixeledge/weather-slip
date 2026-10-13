@@ -1,7 +1,7 @@
 // Shared by the Orders page (client) and orders.server.ts.
 
 // Same tabs as Shopify's own Orders page, so the list reads familiarly.
-export type OrderView = "all" | "unfulfilled" | "unpaid" | "open" | "archived";
+export type OrderView = "all" | "unfulfilled" | "unpaid" | "open" | "archived" | "cancelled";
 
 export const ORDER_VIEWS: { id: OrderView; label: string; filter: string }[] = [
   // Every order, any status or age (orders older than 60 days need the
@@ -20,6 +20,7 @@ export const ORDER_VIEWS: { id: OrderView; label: string; filter: string }[] = [
   },
   { id: "open", label: "Open", filter: "status:open" },
   { id: "archived", label: "Archived", filter: "status:closed" },
+  { id: "cancelled", label: "Cancelled", filter: "status:cancelled" },
 ];
 
 export type OrderRange = "any" | "30" | "60" | "180" | "365";
