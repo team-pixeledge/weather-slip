@@ -21,7 +21,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
   FREE: {
     name: "Free",
     priceUsd: 0,
-    ordersPerPeriod: 50,
+    ordersPerPeriod: 30,
     allTemplates: false,
     dispatchForecast: false,
     ownApiKey: false,
