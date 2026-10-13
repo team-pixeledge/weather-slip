@@ -238,9 +238,10 @@ export default function Settings() {
               label="Your OpenWeather API key (optional)"
               details={
                 loaded.savedKey
-                  ? `Saved: ${loaded.savedKey}. Leave blank to keep it.`
+                  ? `Your key is saved (${loaded.savedKey}) and in use. It's never shown in full — type a new one only to replace it.`
                   : "Uses the app's own key if empty."
               }
+              placeholder={loaded.savedKey ? `Saved key ${loaded.savedKey}` : undefined}
               value={apiKey}
               onChange={(e) => setApiKey(e.currentTarget.value)}
             />
