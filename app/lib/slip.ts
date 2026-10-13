@@ -1075,6 +1075,9 @@ const BASE_STYLES = `
   .note { margin-top: 12px; padding: 8px; border: 1px solid #ddd; background: #fafafa; }
   footer { margin-top: 24px; text-align: center; font-size: 11px; }
   .thanks { margin-bottom: 8px; }
+  .ws-mark { display: none; position: fixed; left: 0; right: 0; justify-content: center; align-items: center;
+             gap: 5px; font-size: 9px; color: #888; }
+  .ws-mark svg { width: 14px; height: 14px; }
   table.list { width: 100%; border-collapse: collapse; }
   table.list th, table.list td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
   table.list th { background: #f3f3f3; }
@@ -1121,8 +1124,23 @@ function pageRule(o: SlipOptions): string {
       : "";
   }
   const p = PAPER_SIZES.find((x) => x.id === o.paper) ?? PAPER_SIZES[0]!;
-  return `@page { size: ${p.css}; margin: ${p.id === "A5" ? "7mm" : "10mm"}; }
-    .page { max-width: ${p.maxWidth}; }`;
+  return `@page { size: ${p.css}; margin: 0; }
+    .page { max-width: ${p.maxWidth}; }
+    ${printMargin(p.id === "A5" ? "7mm" : "10mm")}`;
+}
+
+/**
+ * Browsers print their own header/footer (date, title, URL, page number)
+ * inside the @page margin, so the page margin is 0 and the white space
+ * lives on .page instead (cloned onto every printed page). The bottom
+ * keeps room for the Weather Slip mark.
+ */
+function printMargin(m: string): string {
+  return `@media print {
+    .page { padding: ${m} ${m} calc(${m} + 8mm);
+            box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+    .ws-mark { display: flex; bottom: calc(${m} - 2mm); }
+  }`;
 }
 
 /** The merchant's look, as CSS variables the base styles read. */
@@ -1137,7 +1155,7 @@ function designVars(d: SlipDesign, label: boolean): string {
 }
 
 function stylesFor(o: SlipOptions | null): string {
-  if (!o) return BASE_STYLES + "@page { margin: 10mm; }";
+  if (!o) return BASE_STYLES + "@page { margin: 0; }" + printMargin("10mm");
   return (
     designVars(o.design, o.template === "LABEL_4X6") +
     BASE_STYLES +
@@ -1153,6 +1171,17 @@ interface DocOptions {
   /** false: no toolbar or script (in-app preview). */
   chrome: boolean;
 }
+
+/** Printed at the foot of every page (in place of the browser's URL line). */
+const WS_MARK = `<div class="ws-mark"><svg viewBox="0 0 64 64" aria-hidden="true">
+  <defs><linearGradient id="ws-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3FA0F7"/><stop offset="1" stop-color="#1452A8"/></linearGradient></defs>
+  <rect width="64" height="64" rx="14" fill="url(#ws-sky)"/>
+  <rect x="14" y="16" width="30" height="38" rx="4" fill="#FFFFFF"/>
+  <rect x="19" y="24" width="14" height="4" rx="2" fill="#9BC1F1"/>
+  <rect x="19" y="33" width="20" height="10" rx="3" fill="#1F6FDB"/>
+  <rect x="19" y="46" width="16" height="4" rx="2" fill="#9BC1F1"/>
+  <circle cx="46" cy="17" r="10" fill="#FFB12A" stroke="#1E63C4" stroke-width="2.5"/>
+</svg><span>Weather Slip</span></div>`;
 
 function documentHtml(
   title: string,
@@ -1178,6 +1207,7 @@ function documentHtml(
 <body>
 ${d.chrome ? `<div class="bar"><span>${escapeHtml(title)}</span><button type="button" id="print">Print / Save as PDF</button></div>` : ""}
 ${body}
+${WS_MARK}
 ${script}
 </body>
 </html>`;
