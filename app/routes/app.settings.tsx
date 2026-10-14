@@ -11,7 +11,7 @@ import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { addDays } from "../lib/dates";
 import { formatSummary, type DisplaySettings, type Unit } from "../lib/format";
-import { PLANS } from "../lib/plans";
+import { PLANS, plansWith } from "../lib/plans";
 import { ensureShop } from "../lib/shop.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -30,6 +30,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       skipWeekends: shop.skipWeekends,
     },
     plan: PLANS[shop.plan],
+    flowPlans: plansWith((p) => p.flowAutomation),
   };
 };
 
@@ -213,7 +214,89 @@ export default function Settings() {
           estimated delivery date are used instead, when Shopify has them.
         </s-paragraph>
       </s-section>
+
+      <FlowGuide available={loaded.plan.flowAutomation} plans={loaded.flowPlans} />
     </s-page>
+  );
+}
+
+const FLOW_STEPS: React.ReactNode[] = [
+  <>
+    Open{" "}
+    <s-link href="shopify://admin/apps/flow" target="_blank">
+      Shopify Flow
+    </s-link>{" "}
+    and click <strong>Create workflow</strong>.
+  </>,
+  <>
+    Click <strong>Select a trigger</strong> and choose <strong>Order paid</strong>.
+  </>,
+  <>
+    Click <strong>Add action</strong>, search for <strong>Weather</strong> and choose{" "}
+    <strong>Save weather on order</strong> (Weather-Slip action).
+  </>,
+  <>
+    In the action&apos;s Configuration, check that <strong>Order</strong> shows{" "}
+    <strong>order.id</strong> — the order from the trigger. It&apos;s filled in for you.
+  </>,
+  <>
+    Give the workflow a name (e.g. &ldquo;Save weather when paid&rdquo;) and click{" "}
+    <strong>Turn on workflow</strong>.
+  </>,
+];
+
+/**
+ * Step-by-step Shopify Flow setup (Pro and Business). Shopify has no API
+ * for an app to create a merchant's workflow; the published Flow template
+ * (extensions/weather-slip-flow-paid) will add a one-click link here.
+ */
+function FlowGuide({ available, plans }: { available: boolean; plans: string }) {
+  return (
+    <s-section heading="Save weather automatically with Shopify Flow">
+      <div id="flow" />
+      {!available ? (
+        <s-paragraph>
+          On the {plans} plans, Shopify Flow can save each order&apos;s weather the moment
+          it&apos;s paid or fulfilled, so its slip prints instantly.{" "}
+          <s-link href="/app/plans">See plans</s-link>
+        </s-paragraph>
+      ) : (
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            Save each order&apos;s weather as soon as it&apos;s paid, so Shopify&apos;s own
+            packing slip shows it and printing is instant. Saving doesn&apos;t use your
+            plan&apos;s prints — printing the slip does. Takes about a minute:
+          </s-paragraph>
+          <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+            {FLOW_STEPS.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+          <s-text type="strong">When you&apos;re done, it looks like this:</s-text>
+          <img
+            src="/help/flow-workflow.png"
+            alt="Shopify Flow workflow: trigger Order paid, then the Weather-Slip action Save weather on order with Order set to order.id, and the Turn on workflow button at the top right."
+            style={{
+              display: "block",
+              width: "100%",
+              maxWidth: 760,
+              height: "auto",
+              border: "1px solid #e3e3e3",
+              borderRadius: 8,
+            }}
+          />
+          <s-paragraph>
+            <strong>Also when it ships?</strong> Repeat the steps with the trigger{" "}
+            <strong>Order fulfilled</strong>. An order that already has weather keeps it — the
+            second workflow won&apos;t change or charge anything.
+          </s-paragraph>
+          <s-paragraph>
+            <strong>Don&apos;t see the action?</strong> Reload Shopify Flow. It&apos;s listed
+            under Apps → Weather-Slip, and only stores on the {plans} plans can run it.
+          </s-paragraph>
+        </s-stack>
+      )}
+    </s-section>
   );
 }
 

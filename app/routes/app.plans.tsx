@@ -225,7 +225,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "How does the Shopify Flow automation work? (Pro and Business)",
-    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it and the slip prints instantly. Saving doesn't use your allowance; printing the slip does.",
+    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it and the slip prints instantly. Saving doesn't use your allowance; printing the slip does. Settings has a step-by-step guide with a picture of the finished workflow.",
   ],
   [
     "How do I get a custom template? (Business)",
@@ -339,7 +339,8 @@ function Checklist({ c }: { c: ChecklistState }) {
             Shopify Flow
           </s-link>
           : trigger <em>Order paid</em> or <em>Order fulfilled</em> → action{" "}
-          <em>Save weather on order</em> (Weather Slip) → Turn on.
+          <em>Save weather on order</em> (Weather Slip) → Turn on.{" "}
+          <s-link href="/app/settings#flow">Step-by-step guide with a picture</s-link>.
         </>
       ),
     },
