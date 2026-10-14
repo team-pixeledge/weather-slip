@@ -281,6 +281,12 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
   guide (only the guide: the snippet is the same one Free uses, and Liquid
   can read the metafield anywhere — not enforceable, so the card says
   "guide").
+- **Forecast days by plan** (user decision 2026-10-14): Free/Starter today
+  + 2, Pro + 3, Business + 4 (provider max). `PlanLimits.forecastDaysAhead`
+  → `SlipDesign.maxDaysAhead` (plan-set only, via planSlipOptions; slips
+  trim the saved forecast at render, so upgrades show more on old orders;
+  notes/tips only use shown days) and caps the saved summary's horizon in
+  order-weather.server (pending fills wait until the date is in range).
 - Free/Starter "unfulfilled only" is enforced at print too
   (`planAllowsOrder` in the print route: fulfilled/restocked/cancelled/
   closed orders are skipped unless printed before; skipped ones are named in

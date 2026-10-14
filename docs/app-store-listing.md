@@ -39,7 +39,7 @@ Wording rules for this listing (and any ad copy):
 
 **App details** (≤500)
 
-> Weather Slip prints packing slips that show the weather forecast at your customer's city — today plus the next 4 days, with dispatch and delivery days marked and rain, frost or heat flagged. The forecast is fetched once, when an order's slip is first printed, and saved on the order, so every reprint matches. Print one slip or many from the app or Shopify's Orders page, or add the weather to Shopify's own packing slip. Weather data © OpenWeather.
+> Weather Slip prints packing slips that show the weather forecast at your customer's city — today plus up to the next 4 days (by plan), with dispatch and delivery days marked and rain, frost or heat flagged. The forecast is fetched once, when an order's slip is first printed, and saved on the order, so every reprint matches. Print one slip or many from the app or Shopify's Orders page, or add the weather to Shopify's own packing slip. Weather data © OpenWeather.
 
 **Feature list** (each ≤80)
 
@@ -74,10 +74,10 @@ Allowance resets every 30 days on monthly and yearly billing alike.
 
 | Plan | Monthly | Yearly | Includes |
 |---|---|---|---|
-| Free | $0 | — | 30 slip prints/month with weather · Classic template · unfulfilled orders · logo, fonts, colours, paper sizes · weather on Shopify's own packing slip |
-| Starter | $4.99 | $49 | 500 slip prints/month · everything in Free · Minimal (ink-saver) template · dispatch-day forecast in saved weather · print from Shopify's Orders page · customer list printout · Order Printer & Order Printer Pro setup guide · watermark (PAID, FRAGILE, GIFT…) |
-| Pro | $9.99 | $99 | 2,000 slip prints/month · everything in Starter · Detailed template with prices · all order views (fulfilled, unpaid, cancelled, archived) · slips in 7 languages · distance to the customer · Shopify Flow action · watermark with your own text |
-| Business | $19.99 | $199 | 5,000 slip prints/month · everything in Pro · 4×6 / 4×4 shipping label template · custom template built for your brand (on request) · logo watermark · remove the Weather Slip mark from prints |
+| Free | $0 | — | 30 slip prints/month with weather · forecast today + 2 days · Classic template · unfulfilled orders · logo, fonts, colours, paper sizes · weather on Shopify's own packing slip |
+| Starter | $4.99 | $49 | 500 slip prints/month · forecast today + 2 days · everything in Free · Minimal (ink-saver) template · dispatch-day forecast in saved weather · print from Shopify's Orders page · customer list printout · Order Printer & Order Printer Pro setup guide · watermark (PAID, FRAGILE, GIFT…) |
+| Pro | $9.99 | $99 | 2,000 slip prints/month · forecast today + 3 days · everything in Starter · Detailed template with prices · all order views (fulfilled, unpaid, cancelled, archived) · slips in 7 languages · distance to the customer · Shopify Flow action · watermark with your own text |
+| Business | $19.99 | $199 | 5,000 slip prints/month · forecast today + 4 days · everything in Pro · 4×6 / 4×4 shipping label template · custom template built for your brand (on request) · logo watermark · remove the Weather Slip mark from prints |
 
 At the limit, slips still print, without weather. The shop owner gets an
 email at 80% and 100%.

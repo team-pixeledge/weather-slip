@@ -351,6 +351,12 @@ export interface SlipDesign {
   forecastRange: "all" | "trip";
   /** Dispatch date, tag and highlight (Starter and up — planSlipOptions). */
   showDispatch: boolean;
+  /**
+   * Forecast days after the first (fetch-day) day to print. Set by the plan
+   * (planSlipOptions), never by the merchant; the full forecast stays saved
+   * on the order, so an upgrade shows more days on old orders too.
+   */
+  maxDaysAhead: number;
   /** One line of advice when delivery day brings rain, frost or heat. */
   showTip: boolean;
   /** Scannable order number in the header, for warehouses. */
@@ -412,6 +418,7 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   showBranding: true,
   forecastRange: "all",
   showDispatch: true,
+  maxDaysAhead: 4,
   showTip: true,
   orderCode: "none",
   watermark: "none",
@@ -555,6 +562,7 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     showBranding: bool("showBranding"),
     forecastRange: pick("forecastRange", ["all", "trip"] as const),
     showDispatch: bool("showDispatch"),
+    maxDaysAhead: clampInt(r.maxDaysAhead, 0, 16, d.maxDaysAhead),
     showTip: bool("showTip"),
     orderCode: pick("orderCode", ["none", "qr", "barcode"] as const),
     watermark: pick("watermark", ["none", "text", "logo"] as const),
@@ -657,9 +665,15 @@ function unavailableText(t: SlipStrings, status: Exclude<SlipWeather["status"], 
   return status === "limit_reached" ? t.limitReached : status === "no_location" ? t.noLocation : t.unavailable;
 }
 
-function forecastNotes(t: SlipStrings, loc: string, w: Extract<SlipWeather, { status: "ok" }>): string[] {
-  if (w.delivery > w.horizonEnd) {
-    return [t.beyondRange(shortDay(w.delivery, loc), shortDay(w.horizonEnd, loc))];
+function forecastNotes(
+  t: SlipStrings,
+  loc: string,
+  w: Extract<SlipWeather, { status: "ok" }>,
+  d: SlipDesign,
+): string[] {
+  const end = shownEnd(w, d);
+  if (w.delivery > end) {
+    return [t.beyondRange(shortDay(w.delivery, loc), shortDay(end, loc))];
   }
   if (w.delivery < (w.days[0]?.date ?? w.delivery)) return [t.deliveryPassed];
   return [];
@@ -708,15 +722,32 @@ const dayTags = (
  * rather than an empty strip.
  */
 function shownDays(w: Extract<SlipWeather, { status: "ok" }>, d: SlipDesign): SlipDay[] {
-  if (d.forecastRange !== "trip") return w.days;
-  const trip = w.days.filter((x) => x.date >= w.dispatch && x.date <= w.delivery);
-  return trip.length ? trip : w.days;
+  const inPlan = planDays(w, d);
+  if (d.forecastRange !== "trip") return inPlan;
+  const trip = inPlan.filter((x) => x.date >= w.dispatch && x.date <= w.delivery);
+  return trip.length ? trip : inPlan;
 }
 
+/** The forecast days the plan includes: the fetch day + maxDaysAhead. */
+function planDays(w: Extract<SlipWeather, { status: "ok" }>, d: SlipDesign): SlipDay[] {
+  return w.days.slice(0, d.maxDaysAhead + 1);
+}
+
+/** Last date the slip may show — the plan's range, or the provider's if shorter. */
+const shownEnd = (w: Extract<SlipWeather, { status: "ok" }>, d: SlipDesign) => {
+  const last = planDays(w, d).at(-1)?.date;
+  return last && last < w.horizonEnd ? last : w.horizonEnd;
+};
+
 /** "Rain expected on delivery day: …" — the worst of rain, frost, heat. */
-export function weatherTip(t: SlipStrings, w: SlipWeather | undefined): string | null {
+export function weatherTip(
+  t: SlipStrings,
+  w: SlipWeather | undefined,
+  d: SlipDesign = DEFAULT_SLIP_DESIGN,
+): string | null {
   if (!w || w.status !== "ok") return null;
-  const day = w.days.find((x) => x.date === w.delivery);
+  // Only from days the plan shows — never hint at weather it doesn't include.
+  const day = planDays(w, d).find((x) => x.date === w.delivery);
   if (!day) return null;
   const warns = weatherWarnings(day);
   if (warns.includes("rain")) return t.tipRain;
@@ -726,7 +757,7 @@ export function weatherTip(t: SlipStrings, w: SlipWeather | undefined): string |
 }
 
 const tipHtml = (t: SlipStrings, w: SlipWeather | undefined, d: SlipDesign) => {
-  const tip = d.showTip ? weatherTip(t, w) : null;
+  const tip = d.showTip ? weatherTip(t, w, d) : null;
   return tip ? `<p class="tip">${WARN_ICON}<span>${escapeHtml(tip)}</span></p>` : "";
 };
 
@@ -799,7 +830,7 @@ function weatherCards(
       ${d.showNow && w.current ? `<p class="now">${weatherIcon(w.current.label, 18)} ${escapeHtml(t.nowTitle)}: ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(cond(w.current.label))}</p>` : ""}
       <div class="days">${boxes || `<p class="muted">${escapeHtml(t.noForecastDays)}</p>`}</div>
       ${tipHtml(t, w, d)}
-      ${forecastNotes(t, loc, w)
+      ${forecastNotes(t, loc, w, d)
         .map((n) => `<p class="muted">${escapeHtml(n)}</p>`)
         .join("")}
       ${d.showAsOf ? `<p class="asof">${escapeHtml(t.forecastAsOf)} ${escapeHtml(asOfText(w.asOf, timeZone, loc))}</p>` : ""}
@@ -852,7 +883,7 @@ function weatherTable(
         <tbody>${rows}</tbody>
       </table>
       ${tipHtml(t, w, d)}
-      ${forecastNotes(t, loc, w)
+      ${forecastNotes(t, loc, w, d)
         .map((n) => `<p class="muted">${escapeHtml(n)}</p>`)
         .join("")}
       ${d.showAsOf ? `<p class="asof">${escapeHtml(t.forecastAsOf)} ${escapeHtml(asOfText(w.asOf, timeZone, loc))}</p>` : ""}

@@ -21,6 +21,8 @@ export interface PlanLimits {
   /** Order Printer / Order Printer Pro snippet setup. */
   allTemplates: boolean;
   dispatchForecast: boolean;
+  /** Forecast days after today on slips and the saved summary (provider max 4). */
+  forecastDaysAhead: number;
   /** Print action in Shopify's own Orders section. */
   printFromShopify: boolean;
   customerList: boolean;
@@ -54,6 +56,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     orderViews: ["unfulfilled"],
     allTemplates: false,
     dispatchForecast: false,
+    forecastDaysAhead: 2,
     printFromShopify: false,
     customerList: false,
     languages: false,
@@ -73,6 +76,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     orderViews: ["unfulfilled"],
     allTemplates: true,
     dispatchForecast: true,
+    forecastDaysAhead: 2,
     printFromShopify: true,
     customerList: true,
     languages: false,
@@ -92,6 +96,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     orderViews: ALL_VIEWS,
     allTemplates: true,
     dispatchForecast: true,
+    forecastDaysAhead: 3,
     printFromShopify: true,
     customerList: true,
     languages: true,
@@ -112,6 +117,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     orderViews: ALL_VIEWS,
     allTemplates: true,
     dispatchForecast: true,
+    forecastDaysAhead: 4,
     printFromShopify: true,
     customerList: true,
     languages: true,
@@ -179,6 +185,7 @@ export function planSlipOptions(o: SlipOptions, plan: PlanId): SlipOptions {
       language: p.languages ? o.design.language : "en",
       showDistance: p.distance && o.design.showDistance,
       showDispatch: p.dispatchForecast && o.design.showDispatch,
+      maxDaysAhead: p.forecastDaysAhead,
       showBranding: p.removeBranding ? o.design.showBranding : true,
       ...planWatermark(o, p.watermark),
     },
@@ -235,6 +242,10 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
           : n === 4
             ? "All 4 slip templates incl. 4×6 shipping label"
             : `${n} slip templates (${n === 2 ? "+ Minimal ink saver" : "+ Detailed with prices"})`,
+      included: true,
+    },
+    {
+      text: `Forecast for today + ${p.forecastDaysAhead} days${p.forecastDaysAhead >= 4 ? " (the most)" : ""}`,
       included: true,
     },
     { text: "Store logo, fonts, colours, paper sizes", included: true },

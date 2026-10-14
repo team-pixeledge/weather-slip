@@ -230,6 +230,8 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
   const forecast = await cachedForecast(provider, point, now);
   const today = destinationToday(forecast, now);
   const settings = displaySettings(current);
+  // The plan decides how far ahead the saved summary may reach.
+  const horizon = Math.min(provider.horizonDays, PLANS[current.plan].forecastDaysAhead);
 
   let snap: WeatherSnapshot;
   if (job.reason === "PENDING_FILL" && prev?.payload) {
@@ -237,14 +239,14 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
       prev.payload as unknown as WeatherSnapshot,
       forecast,
       today,
-      provider.horizonDays,
+      horizon,
       settings,
     );
   } else {
     const dates = orderShippingDates(order, current);
     snap = buildSnapshot({
       forecast,
-      horizonDays: provider.horizonDays,
+      horizonDays: horizon,
       point,
       city: addr.city,
       countryCode: addr.countryCodeV2,
@@ -258,7 +260,7 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
 
   await writeMetafields(admin, job.orderId, snap);
 
-  const fill = nextFillDate(snap, provider.horizonDays);
+  const fill = nextFillDate(snap, horizon);
   await saveVersion(prev, {
     ...base,
     status: statusFor(snap),

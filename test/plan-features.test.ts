@@ -267,3 +267,26 @@ describe("plan gates on the printed slip", () => {
     expect(planAllowsOrder("PRO", fulfilled, false)).toBe(true);
   });
 });
+
+describe("forecast days by plan", () => {
+  const cards = async (plan: "FREE" | "STARTER" | "PRO" | "BUSINESS") => {
+    const { planSlipOptions: clamp } = await import("../app/lib/plans");
+    return renderPackingSlips(shop, [order], weather, {
+      unit: "C", timeZone: "UTC", nonce: "n", chrome: false, slip: clamp(DEFAULT_SLIP_OPTIONS, plan),
+    });
+  };
+  it("Free/Starter today+2, Pro today+3, Business today+4", async () => {
+    const n = async (p: "FREE" | "STARTER" | "PRO" | "BUSINESS") => (await cards(p)).match(/class="day[ "]/g)!.length;
+    expect(await n("FREE")).toBe(3);
+    expect(await n("STARTER")).toBe(3);
+    expect(await n("PRO")).toBe(4);
+    expect(await n("BUSINESS")).toBe(5);
+  });
+  it("a delivery day past the plan's range gets the note, not a tip from hidden data", async () => {
+    // Sample delivery is today+3 with 75% rain: beyond Free's range.
+    const free = await cards("FREE");
+    expect(free).toContain("is beyond the forecast range");
+    expect(free).not.toContain("Rain expected on delivery day");
+    expect(await cards("PRO")).toContain("Rain expected on delivery day");
+  });
+});
