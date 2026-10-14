@@ -229,3 +229,15 @@ describe("watermark", () => {
     expect(text).not.toMatch(/<div class="wm"[^>]*style=/);
   });
 });
+
+describe("plan cards", () => {
+  it("list included features first, then the rest, keeping order", async () => {
+    const { planFeatures } = await import("../app/lib/plans");
+    for (const id of ["FREE", "STARTER", "PRO", "BUSINESS"] as const) {
+      const f = planFeatures(id);
+      const firstMissing = f.findIndex((x) => !x.included);
+      if (firstMissing >= 0) expect(f.slice(firstMissing).every((x) => !x.included)).toBe(true);
+      expect(f[0]!.text).toContain("slip prints/month");
+    }
+  });
+});

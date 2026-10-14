@@ -203,13 +203,13 @@ export function allowedView(view: OrderView, plan: PlanId): OrderView {
 }
 
 /**
- * Every feature, for every plan card: included ones get a ✓, the rest are
- * shown faded so the cards compare side by side (no separate table).
+ * Every feature, for every plan card: included ones (✓) first, then the
+ * rest faded, so each card reads as "what you get, then what's more".
  */
 export function planFeatures(id: PlanId): { text: string; included: boolean }[] {
   const p = PLANS[id];
   const n = p.templates.length;
-  return [
+  const all = [
     { text: `${p.ordersPerPeriod.toLocaleString("en-US")} slip prints/month with weather`, included: true },
     { text: "Each print and reprint counts once per order", included: true },
     {
@@ -238,6 +238,8 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
     { text: "Watermark with your own text", included: p.watermark === "custom" || p.watermark === "logo" },
     { text: "Watermark with your logo", included: p.watermark === "logo" },
   ];
+  // Included first (user request 2026-10-14), each group in list order.
+  return [...all.filter((f) => f.included), ...all.filter((f) => !f.included)];
 }
 
 export const USAGE_PERIOD_DAYS = 30;
