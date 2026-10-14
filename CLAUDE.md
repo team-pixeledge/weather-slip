@@ -240,7 +240,8 @@ written by `recordPrints` after every slip render (app tab and admin print
 action; not the customer list) — separate from `CountedOrder` (weather/
 usage), so an order printed without weather still shows as printed. Repeat
 within 10 min doesn't bump printCount. Orders page: printed rows are dimmed
-(`Dim`), green "Printed ×n · date" badge, button "Reprint". Migration
+(`Dim`), green "n Printed on 14th Oct" badge, button "Reprint". No
+Tags column (user request 2026-10-14). Migration
 `printed_orders` backfills from CountedOrder rows created before per-print
 charging (10:50:24 UTC) or with lastPrintedAt. customers/redact deletes them.
 

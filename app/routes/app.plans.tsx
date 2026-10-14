@@ -185,7 +185,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "How do I see which slips are already printed?",
-    "On the Orders page an order whose slip has been printed is faded, shows a green “Printed” badge with the date (and ×2, ×3… for repeat prints), and its button says Reprint. Printing the same order again within 10 minutes doesn't add to the count.",
+    "On the Orders page an order whose slip has been printed is faded, shows a green badge with how many times and when it was last printed (e.g. “2 Printed on 14th Oct”), and its button says Reprint. Printing the same order again within 10 minutes doesn't add to the count.",
   ],
   [
     "If I re-pack an order and print its slip again, is that charged?",

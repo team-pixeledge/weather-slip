@@ -138,9 +138,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 const Dim = ({ on, children }: { on: boolean; children: React.ReactNode }) =>
   on ? <span style={{ opacity: 0.5 }}>{children}</span> : <>{children}</>;
 
+/** "1 Printed on 14th Oct", "3 Printed on 2nd Nov" (count, last print). */
 const printedLabel = (p: { count: number; last: string }) => {
-  const when = new Date(p.last).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return p.count > 1 ? `Printed ×${p.count} · ${when}` : `Printed ${when}`;
+  const d = new Date(p.last);
+  const day = d.getDate();
+  const suffix =
+    day % 100 >= 11 && day % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th";
+  const month = d.toLocaleDateString("en-GB", { month: "short" });
+  return `${p.count} Printed on ${day}${suffix} ${month}`;
 };
 
 export default function Orders() {
@@ -428,7 +433,6 @@ export default function Orders() {
             <s-table-header>Items</s-table-header>
             <s-table-header>Delivery method</s-table-header>
             <s-table-header>Packing slip</s-table-header>
-            <s-table-header>Tags</s-table-header>
           </s-table-header-row>
           <s-table-body>
             {rows.map((r) => {
@@ -500,7 +504,6 @@ export default function Orders() {
                       {r.printed && <s-badge tone="success">{printedLabel(r.printed)}</s-badge>}
                     </s-stack>
                   </s-table-cell>
-                  <s-table-cell><Dim on={dim}>{r.tags.join(", ")}</Dim></s-table-cell>
                 </s-table-row>
               );
             })}
