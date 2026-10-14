@@ -349,6 +349,8 @@ export interface SlipDesign {
   showBranding: boolean;
   /** "all" = today → horizon; "trip" = dispatch day → delivery day only. */
   forecastRange: "all" | "trip";
+  /** Dispatch date, tag and highlight (Starter and up — planSlipOptions). */
+  showDispatch: boolean;
   /** One line of advice when delivery day brings rain, frost or heat. */
   showTip: boolean;
   /** Scannable order number in the header, for warehouses. */
@@ -409,6 +411,7 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   language: "en",
   showBranding: true,
   forecastRange: "all",
+  showDispatch: true,
   showTip: true,
   orderCode: "none",
   watermark: "none",
@@ -551,6 +554,7 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     language: isSlipLanguage(r.language) ? r.language : d.language,
     showBranding: bool("showBranding"),
     forecastRange: pick("forecastRange", ["all", "trip"] as const),
+    showDispatch: bool("showDispatch"),
     showTip: bool("showTip"),
     orderCode: pick("orderCode", ["none", "qr", "barcode"] as const),
     watermark: pick("watermark", ["none", "text", "logo"] as const),
@@ -687,9 +691,14 @@ function warningsHtml(t: SlipStrings, warnings: WeatherWarning[]): string {
     .join("")}</span>`;
 }
 
-const dayTags = (t: SlipStrings, w: { dispatch: string; delivery: string }, date: string) =>
+const dayTags = (
+  t: SlipStrings,
+  w: { dispatch: string; delivery: string },
+  date: string,
+  d: SlipDesign,
+) =>
   [
-    date === w.dispatch ? t.dispatch : null,
+    d.showDispatch && date === w.dispatch ? t.dispatch : null,
     date === w.delivery ? t.delivery : null,
   ].filter((x): x is string => x != null);
 
@@ -754,7 +763,7 @@ function weatherCards(
   const dates = d.showDates
     ? `
     <div class="dates">
-      <p><strong>${escapeHtml(t.dispatch)}:</strong> ${escapeHtml(longDay(w.dispatch, loc))}</p>
+      ${d.showDispatch ? `<p><strong>${escapeHtml(t.dispatch)}:</strong> ${escapeHtml(longDay(w.dispatch, loc))}</p>` : ""}
       <p><strong>${escapeHtml(t.estimatedDelivery)}:</strong> ${escapeHtml(longDay(w.delivery, loc))}</p>
     </div>`
     : "";
@@ -764,7 +773,7 @@ function weatherCards(
   }
   const boxes = shownDays(w, d)
     .map((day) => {
-      const tags = dayTags(t, w, day.date);
+      const tags = dayTags(t, w, day.date, d);
       const rain =
         d.showRain && day.precipProb != null && day.precipProb >= 20
           ? `<div class="rain">${DROP_ICON} ${escapeHtml(t.rainPct(day.precipProb))}</div>`
@@ -811,15 +820,15 @@ function weatherTable(
   const dates = !d.showDates
     ? ""
     : compact
-      ? `<p class="dates"><strong>${escapeHtml(t.dispatch)}</strong> ${escapeHtml(shortDay(w.dispatch, loc))} · <strong>${escapeHtml(t.delivery)}</strong> ${escapeHtml(shortDay(w.delivery, loc))}</p>`
-      : `<p class="dates"><strong>${escapeHtml(t.dispatch)}:</strong> ${escapeHtml(longDay(w.dispatch, loc))} &nbsp; <strong>${escapeHtml(t.estimatedDelivery)}:</strong> ${escapeHtml(longDay(w.delivery, loc))}</p>`;
+      ? `<p class="dates">${d.showDispatch ? `<strong>${escapeHtml(t.dispatch)}</strong> ${escapeHtml(shortDay(w.dispatch, loc))} · ` : ""}<strong>${escapeHtml(t.delivery)}</strong> ${escapeHtml(shortDay(w.delivery, loc))}</p>`
+      : `<p class="dates">${d.showDispatch ? `<strong>${escapeHtml(t.dispatch)}:</strong> ${escapeHtml(longDay(w.dispatch, loc))} &nbsp; ` : ""}<strong>${escapeHtml(t.estimatedDelivery)}:</strong> ${escapeHtml(longDay(w.delivery, loc))}</p>`;
   if (!d.showWeather) return `<section class="weather">${dates}</section>`;
   if (w.status !== "ok") {
     return `<section class="weather">${dates}<p class="muted">${escapeHtml(unavailableText(t, w.status))}</p></section>`;
   }
   const rows = shownDays(w, d)
     .map((day) => {
-      const tags = dayTags(t, w, day.date);
+      const tags = dayTags(t, w, day.date, d);
       const rain =
         day.precipProb != null && day.precipProb >= 20
           ? `${DROP_ICON} ${day.precipProb}%`
@@ -1408,6 +1417,8 @@ interface DocOptions {
   mark: boolean;
   /** <html lang>, so the browser hyphenates and reads it right. */
   lang: string;
+  /** Shown in the toolbar only (never printed), e.g. orders skipped by plan. */
+  notice?: string;
 }
 
 /** Printed at the foot of every page (in place of the browser's URL line). */
@@ -1443,7 +1454,7 @@ function documentHtml(
 <style nonce="${d.nonce}">${styles}</style>
 </head>
 <body>
-${d.chrome ? `<div class="bar"><span>${escapeHtml(title)}</span><button type="button" id="print">Print / Save as PDF</button></div>` : ""}
+${d.chrome ? `<div class="bar"><span>${escapeHtml(title)}${d.notice ? ` — <em>${escapeHtml(d.notice)}</em>` : ""}</span><button type="button" id="print">Print / Save as PDF</button></div>` : ""}
 ${body}
 ${d.mark ? WS_MARK : ""}
 ${script}
@@ -1460,6 +1471,8 @@ export interface SlipRenderOptions {
   slip?: SlipOptions;
   /** Keyed by numeric order ID; only read when design.showDistance. */
   distance?: Map<string, SlipDistance[]>;
+  /** Toolbar-only note (orders skipped by the plan). */
+  notice?: string;
 }
 
 export function renderPackingSlips(
@@ -1495,6 +1508,7 @@ export function renderPackingSlips(
     chrome: opts.chrome ?? true,
     mark: o.design.showBranding,
     lang: o.design.language,
+    notice: opts.notice,
   });
 }
 
@@ -1547,6 +1561,7 @@ export function renderCustomerList(
       chrome: opts.chrome ?? true,
       mark: opts.mark ?? true,
       lang: "en",
+      notice: opts.notice,
     },
   );
 }

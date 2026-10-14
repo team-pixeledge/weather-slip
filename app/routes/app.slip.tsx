@@ -64,6 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       templates: plan.templates,
       languages: plan.languages,
       distance: plan.distance,
+      dispatchForecast: plan.dispatchForecast,
       removeBranding: plan.removeBranding,
       customTemplateRequest: plan.customTemplateRequest,
       watermark: plan.watermark,
@@ -73,6 +74,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       watermarkCustom: plansWith((p) => p.watermark === "custom" || p.watermark === "logo"),
       watermarkLogo: plansWith((p) => p.watermark === "logo"),
       languages: plansWith((p) => p.languages),
+      dispatch: plansWith((p) => p.dispatchForecast),
       distance: plansWith((p) => p.distance),
       removeBranding: plansWith((p) => p.removeBranding),
       customTemplateRequest: plansWith((p) => p.customTemplateRequest),
@@ -743,6 +745,17 @@ export default function PackingSlip() {
                 {flag("showRain", "Chance of rain", !d.showWeather)}
                 {flag("showAsOf", "“Forecast as of” time", !d.showWeather)}
                 {flag("showDates", "Dispatch and delivery dates")}
+                {flag(
+                  "showDispatch",
+                  "Dispatch day (date, tag and highlighted forecast)",
+                  !plan.dispatchForecast,
+                )}
+                {!plan.dispatchForecast && (
+                  <s-text color="subdued">
+                    The dispatch day is on the {loaded.upsell.dispatch} plans —
+                    your slips show the delivery day.
+                  </s-text>
+                )}
                 <s-select
                   label="Forecast days"
                   value={d.forecastRange}

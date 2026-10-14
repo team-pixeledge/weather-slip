@@ -12,7 +12,7 @@ import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, res
 import { recordPrints, slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 import { distancesForSlips } from "./distance.server";
-import { PLANS, planSlipOptions, plansWith } from "./plans";
+import { planAllowsOrder, PLANS, planSlipOptions, plansWith } from "./plans";
 
 // These pages carry customer names and addresses: never cache them, never
 // leak the URL (it holds the print token) in a Referer, never let them be
@@ -101,8 +101,31 @@ async function renderPrint(
   }
 
   const { admin } = await unauthenticated.admin(shopDomain);
-  const { shop: shopInfo, orders } = await ordersToPrint(admin, ids);
-  if (orders.length === 0) return message(404, "Those orders weren't found.");
+  const { shop: shopInfo, orders: found } = await ordersToPrint(admin, ids);
+  if (found.length === 0) return message(404, "Those orders weren't found.");
+
+  // Free/Starter: unfulfilled orders only (reprints of earlier prints are fine).
+  const printedBefore = new Set(
+    (
+      await prisma.printedOrder.findMany({
+        where: { shop: shop.shop, orderId: { in: found.map((o) => o.id.slice(o.id.lastIndexOf("/") + 1)) } },
+        select: { orderId: true },
+      })
+    ).map((p) => p.orderId),
+  );
+  const orders = found.filter((o) =>
+    planAllowsOrder(shop.plan, o, printedBefore.has(o.id.slice(o.id.lastIndexOf("/") + 1))),
+  );
+  const skipped = found.filter((o) => !orders.includes(o)).map((o) => o.name);
+  if (orders.length === 0) {
+    return message(
+      403,
+      `Your ${plan.name} plan prints unfulfilled orders. ${skipped.join(", ")} ${skipped.length === 1 ? "is" : "are"} fulfilled, cancelled or archived — printing those is on the ${plansWith((p) => p.orderViews.length > 1)} plans. Upgrade in Weather Slip → Plans & pricing.`,
+    );
+  }
+  const notice = skipped.length
+    ? `Skipped ${skipped.join(", ")}: fulfilled, cancelled or archived orders are on the ${plansWith((p) => p.orderViews.length > 1)} plans.`
+    : undefined;
 
   const timeZone = shopInfo.ianaTimezone || shop.timezone;
   const nonce = randomBytes(16).toString("base64");
@@ -111,6 +134,7 @@ async function renderPrint(
   if (kind === "customers") {
     html = renderCustomerList(shopInfo, orders, {
       ...doc,
+      notice,
       mark: !plan.removeBranding || slipOptions(shop).design.showBranding,
     });
   } else {
@@ -128,7 +152,7 @@ async function renderPrint(
     const distance = slip.design.showDistance
       ? await distancesForSlips(shop, orders, admin, slip.design.distanceFrom)
       : undefined;
-    html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip, distance });
+    html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip, distance, notice });
     await recordPrints(shop.shop, orders.map((o) => o.id.slice(o.id.lastIndexOf("/") + 1)));
   }
   return new Response(html, { headers: securityHeaders(nonce, opts.frameAncestors) });

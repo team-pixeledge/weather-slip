@@ -203,11 +203,11 @@ const FAQ: [string, string][] = [
   ],
   [
     "What does each plan include?",
-    "Free: 30 prints a month, the Classic template, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list, Order Printer setup and a watermark word (PAID, FRAGILE, GIFT…). Pro: 2,000 prints, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer, Shopify Flow and a watermark with your own text. Business: 5,000 prints, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, a logo watermark, and removes the Weather Slip mark.",
+    "Free: 30 prints a month, the Classic template, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list, the Order Printer setup guide and a watermark word (PAID, FRAGILE, GIFT…). Pro: 2,000 prints, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer, Shopify Flow and a watermark with your own text. Business: 5,000 prints, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, a logo watermark, and removes the Weather Slip mark.",
   ],
   [
     "Which orders are listed?",
-    "Free and Starter list unfulfilled and partially fulfilled orders — partially fulfilled ones print only the items still to ship. Pro and Business can also open fulfilled, unpaid, cancelled and archived orders. POS sales and local pickup orders are never listed: they have no shipping address, so there's nothing to forecast.",
+    "Free and Starter list and print unfulfilled and partially fulfilled orders — partially fulfilled ones print only the items still to ship, and an order printed before it shipped can always be reprinted. Free slips show the delivery day; the dispatch day is on Starter and up. Pro and Business can also open fulfilled, unpaid, cancelled and archived orders. POS sales and local pickup orders are never listed: they have no shipping address, so there's nothing to forecast.",
   ],
   [
     "What do the warning badges and the tip on the slip mean?",

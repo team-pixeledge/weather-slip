@@ -216,6 +216,8 @@ const PRINT_QUERY = `#graphql
         email
         displayFinancialStatus
         displayFulfillmentStatus
+        cancelledAt
+        closed
         shippingLine { title }
         shippingAddress {
           name company address1 address2 city province provinceCode zip
@@ -304,6 +306,9 @@ export interface PrintOrder {
   email?: string | null;
   displayFinancialStatus?: string | null;
   displayFulfillmentStatus: string;
+  /** Plan gate: Free/Starter only print unfulfilled orders (planAllowsOrder). */
+  cancelledAt?: string | null;
+  closed?: boolean;
   shippingLine: { title: string } | null;
   shippingAddress: PrintAddress | null;
   billingAddress: PrintAddress | null;

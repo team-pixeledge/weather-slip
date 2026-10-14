@@ -241,3 +241,29 @@ describe("plan cards", () => {
     }
   });
 });
+
+describe("plan gates on the printed slip", () => {
+  it("Free slips show no dispatch day (date, tag or highlight); Starter does", async () => {
+    const { planSlipOptions: clamp } = await import("../app/lib/plans");
+    const opts = (plan: "FREE" | "STARTER") => clamp(DEFAULT_SLIP_OPTIONS, plan);
+    const html = (plan: "FREE" | "STARTER") =>
+      renderPackingSlips(shop, [order], weather, { unit: "C", timeZone: "UTC", nonce: "n", chrome: false, slip: opts(plan) });
+    const free = html("FREE");
+    expect(free).not.toContain("Dispatch:");
+    expect(free).not.toMatch(/class="tag">[^<]*Dispatch/);
+    expect(free).toContain("Estimated delivery:");
+    expect(html("STARTER")).toContain("Dispatch:");
+  });
+
+  it("Free/Starter print unfulfilled orders only, except reprints", async () => {
+    const { planAllowsOrder } = await import("../app/lib/plans");
+    const fulfilled = { displayFulfillmentStatus: "FULFILLED" };
+    const open = { displayFulfillmentStatus: "PARTIALLY_FULFILLED" };
+    expect(planAllowsOrder("STARTER", fulfilled, false)).toBe(false);
+    expect(planAllowsOrder("STARTER", { ...open, cancelledAt: "2026-10-14T00:00:00Z" }, false)).toBe(false);
+    expect(planAllowsOrder("FREE", { ...open, closed: true }, false)).toBe(false);
+    expect(planAllowsOrder("FREE", open, false)).toBe(true);
+    expect(planAllowsOrder("STARTER", fulfilled, true)).toBe(true); // reprint
+    expect(planAllowsOrder("PRO", fulfilled, false)).toBe(true);
+  });
+});

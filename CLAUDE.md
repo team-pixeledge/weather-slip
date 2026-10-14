@@ -274,8 +274,18 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
 - **Templates** 1/2/3/4: Free Classic, Starter +Minimal, Pro +Detailed,
   Business +Shipping label. **Order views**: Free/Starter only Unfulfilled
   (incl. partially fulfilled) — `allowedView` in the Orders loader; Pro+ all.
-- Starter+: dispatch-day forecast, print action in Shopify's Orders
-  (`/print/admin` 403s on Free), customer list, Order Printer setup.
+- Starter+: dispatch day — in the saved summary AND on the printed slip
+  (`SlipDesign.showDispatch`, clamped by planSlipOptions; Free slips show
+  delivery only — missed until 2026-10-14), print action in Shopify's
+  Orders (`/print/admin` 403s on Free), customer list, Order Printer setup
+  guide (only the guide: the snippet is the same one Free uses, and Liquid
+  can read the metafield anywhere — not enforceable, so the card says
+  "guide").
+- Free/Starter "unfulfilled only" is enforced at print too
+  (`planAllowsOrder` in the print route: fulfilled/restocked/cancelled/
+  closed orders are skipped unless printed before; skipped ones are named in
+  the toolbar, or a 403 page if all are), because Starter can print from
+  Shopify's own Orders page.
 - Pro+: slip language, distance, Shopify Flow action. Business: custom
   template requests, hiding the Weather Slip mark.
 - **Watermark** (user decision 2026-10-14, merchant's own, tiered): Free

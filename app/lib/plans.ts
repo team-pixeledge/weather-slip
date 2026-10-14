@@ -178,6 +178,7 @@ export function planSlipOptions(o: SlipOptions, plan: PlanId): SlipOptions {
       ...o.design,
       language: p.languages ? o.design.language : "en",
       showDistance: p.distance && o.design.showDistance,
+      showDispatch: p.dispatchForecast && o.design.showDispatch,
       showBranding: p.removeBranding ? o.design.showBranding : true,
       ...planWatermark(o, p.watermark),
     },
@@ -194,6 +195,21 @@ function planWatermark(o: SlipOptions, tier: PlanLimits["watermark"]): Pick<Slip
     return { watermark: ok ? "text" : "none" };
   }
   return { watermark: "none" };
+}
+
+/**
+ * Free and Starter work with unfulfilled (incl. partially fulfilled) orders
+ * only — the Orders list enforces it, and so does printing, because Starter
+ * can also print from Shopify's own Orders page. A reprint of an order
+ * printed before it shipped/closed is always allowed.
+ */
+export function planAllowsOrder(
+  plan: PlanId,
+  order: { displayFulfillmentStatus: string; cancelledAt?: string | null; closed?: boolean },
+  printedBefore: boolean,
+): boolean {
+  if (PLANS[plan].orderViews.length > 1 || printedBefore) return true;
+  return !order.cancelledAt && !order.closed && !["FULFILLED", "RESTOCKED"].includes(order.displayFulfillmentStatus);
 }
 
 /** A view this plan may open; anything else falls back to its default. */
@@ -228,7 +244,7 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
     { text: "Dispatch-day forecast in saved weather", included: p.dispatchForecast },
     { text: "Print from Shopify's own Orders page", included: p.printFromShopify },
     { text: "Customer list printout", included: p.customerList },
-    { text: "Order Printer & Order Printer Pro setup", included: p.allTemplates },
+    { text: "Order Printer & Order Printer Pro setup guide", included: p.allTemplates },
     { text: "Slips in 7 languages", included: p.languages },
     { text: "Distance to the customer on the slip", included: p.distance },
     { text: "Shopify Flow: save weather when paid or fulfilled", included: p.flowAutomation },
