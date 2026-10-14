@@ -114,25 +114,34 @@ export async function consumeUsage(
 
 class LimitReached extends Error {}
 
+/** Printing the same order again within this window doesn't charge again. */
+export const PRINT_RECHARGE_MS = 10 * 60 * 1000;
+
 /**
- * Plans count orders, not weather API calls: count this order against the
- * plan unless it was counted before. True if the order is (now) counted,
- * false if the shop is at its limit. Atomic — the CountedOrder key means two
- * prints of the same order at once count it once, and a failed usage take
- * rolls the row back so the order can still be counted later.
+ * Plans count prints (user decision 2026-10-14): every order on every print
+ * with weather uses one unit — reprints included. Printing the same order
+ * again within PRINT_RECHARGE_MS is free, so the admin print preview
+ * reloading, a refreshed tab or a double-click don't each charge.
+ *
+ * True if the print may show weather (charged now, or charged moments
+ * ago), false at the plan limit. Atomic: the conditional upsert on
+ * CountedOrder decides "charge or not" in one statement, and a refused
+ * usage take rolls it back.
  */
-export async function countOrder(shop: Shop, orderId: string, now = new Date()): Promise<boolean> {
+export async function chargePrint(shop: Shop, orderId: string, now = new Date()): Promise<boolean> {
+  const since = new Date(now.getTime() - PRINT_RECHARGE_MS);
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const inserted = await tx.$executeRaw`
-        INSERT INTO "CountedOrder" ("shop", "orderId", "countedAt")
-        VALUES (${shop.shop}, ${orderId}, ${now})
-        ON CONFLICT DO NOTHING`;
-      if (inserted === 0) return "already" as const;
-      if (await consumeUsage(shop, now, tx)) return "counted" as const;
+    const charged = await prisma.$transaction(async (tx) => {
+      const due = await tx.$executeRaw`
+        INSERT INTO "CountedOrder" ("shop", "orderId", "countedAt", "lastPrintedAt")
+        VALUES (${shop.shop}, ${orderId}, ${now}, ${now})
+        ON CONFLICT ("shop", "orderId") DO UPDATE SET "lastPrintedAt" = EXCLUDED."lastPrintedAt"
+        WHERE "CountedOrder"."lastPrintedAt" IS NULL OR "CountedOrder"."lastPrintedAt" < ${since}`;
+      if (due === 0) return false; // printed moments ago: free
+      if (await consumeUsage(shop, now, tx)) return true;
       throw new LimitReached();
     });
-    if (result === "counted") {
+    if (charged) {
       // Lazy import: usage-alerts reaches shopify.server, which imports this file.
       runInBackground(import("./usage-alerts.server").then((m) => m.notifyUsageIfNeeded(shop.shop)));
     }
@@ -141,6 +150,17 @@ export async function countOrder(shop: Shop, orderId: string, now = new Date()):
     if (err instanceof LimitReached) return false;
     throw err;
   }
+}
+
+/**
+ * Mark an order as having weather without charging (Shopify Flow saves
+ * weather ahead of printing; the print itself is what's charged).
+ */
+export async function markCounted(shop: string, orderId: string, now = new Date()): Promise<void> {
+  await prisma.$executeRaw`
+    INSERT INTO "CountedOrder" ("shop", "orderId", "countedAt")
+    VALUES (${shop}, ${orderId}, ${now})
+    ON CONFLICT DO NOTHING`;
 }
 
 export async function isCounted(shop: string, orderId: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-// Warning banner from 80% of the month's orders (Orders and Plans pages).
+// Warning banner from 80% of the month's prints (Orders and Plans pages).
 
 export interface UsageInfo {
   used: number;
@@ -21,14 +21,14 @@ export function UsageBanner({ usage, onUpgrade }: { usage: UsageInfo; onUpgrade?
     </s-button>
   );
   return full ? (
-    <s-banner tone="critical" heading="You've reached this month's order limit">
-      All {usage.limit.toLocaleString()} orders in your plan are used. New slips print without
-      weather until {fmtDate(usage.resetsAt)}; reprints of counted orders still show it.
+    <s-banner tone="critical" heading="You've reached this month's print limit">
+      All {usage.limit.toLocaleString()} prints in your plan are used. Slips — reprints included —
+      print without weather until {fmtDate(usage.resetsAt)}.
       {upgrade}
     </s-banner>
   ) : (
-    <s-banner tone="warning" heading={`You've used ${usage.pct}% of this month's orders`}>
-      {usage.used.toLocaleString()} of {usage.limit.toLocaleString()} orders printed with weather ·
+    <s-banner tone="warning" heading={`You've used ${usage.pct}% of this month's prints`}>
+      {usage.used.toLocaleString()} of {usage.limit.toLocaleString()} prints with weather ·
       resets {fmtDate(usage.resetsAt)}.{usage.canUpgrade ? " Upgrade to avoid running out." : ""}
       {upgrade}
     </s-banner>

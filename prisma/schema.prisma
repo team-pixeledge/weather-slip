@@ -139,13 +139,16 @@ model TemplateRequest {
   @@index([shop, createdAt])
 }
 
-// Plans count orders, not API calls: one row per order the first time a
-// merchant gets weather for it (printing it, or Refresh). The primary key
-// makes "count each order once" atomic; usageCount moves with it.
+// One row per order that has had weather (first print or Shopify Flow);
+// jobs only touch orders listed here. Since 2026-10-14 every print uses one
+// unit of the plan (user decision): lastPrintedAt is the last charged print,
+// and printing the same order again within PRINT_RECHARGE_MS is free (the
+// admin's print preview, a reload, a double-click) — see chargePrint.
 model CountedOrder {
-  shop      String
-  orderId   String // numeric Shopify order ID
-  countedAt DateTime @default(now())
+  shop          String
+  orderId       String // numeric Shopify order ID
+  countedAt     DateTime  @default(now())
+  lastPrintedAt DateTime?
 
   shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
 

@@ -132,7 +132,7 @@ export async function recordApiCall(provider: string, monthlyLimit: number, now 
           `${row.count.toLocaleString("en-US")} of ${monthlyLimit.toLocaleString("en-US")} ${provider} calls used in ${id.split(":")[1]}.\n\n` +
             (crossed >= 100
               ? "The free allowance is used up: weather lookups will start failing until the month resets. Add a paid key or upgrade the OpenWeather plan."
-              : "Reprints use saved weather and nearby orders share a 3-hour cache, so usage should stay low — check for unusual traffic."),
+              : "Reprints use the weather saved on the order and nearby orders share a 3-hour cache, so usage should stay low — check for unusual traffic."),
         );
       }
     }

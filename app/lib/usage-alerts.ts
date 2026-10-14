@@ -25,12 +25,12 @@ export function usageEmail(
     : `See your usage:\n${o.url}`;
   if (level === 100) {
     return {
-      subject: "Weather Slip: you've reached this month's order limit",
-      text: `Hi ${o.shopName},\n\nYou've printed weather on all ${o.limit.toLocaleString("en-US")} orders included in your ${o.planName} plan this month. New slips print without weather until your allowance resets on ${fmtDate(o.resetsAt)}. Reprints of orders already counted still show weather.\n\n${upgrade}\n\n— Weather Slip`,
+      subject: "Weather Slip: you've reached this month's print limit",
+      text: `Hi ${o.shopName},\n\nYou've used all ${o.limit.toLocaleString("en-US")} prints with weather included in your ${o.planName} plan this month. Slips, reprints included, print without weather until your allowance resets on ${fmtDate(o.resetsAt)}.\n\n${upgrade}\n\n— Weather Slip`,
     };
   }
   return {
-    subject: "Weather Slip: you've used 80% of this month's orders",
-    text: `Hi ${o.shopName},\n\nYou've used ${o.used.toLocaleString("en-US")} of the ${o.limit.toLocaleString("en-US")} orders included in your ${o.planName} plan this month. Your allowance resets on ${fmtDate(o.resetsAt)}. Once it runs out, new slips print without weather until then.\n\n${upgrade}\n\n— Weather Slip`,
+    subject: "Weather Slip: you've used 80% of this month's prints",
+    text: `Hi ${o.shopName},\n\nYou've used ${o.used.toLocaleString("en-US")} of the ${o.limit.toLocaleString("en-US")} prints with weather included in your ${o.planName} plan this month. Your allowance resets on ${fmtDate(o.resetsAt)}. Once it runs out, new slips print without weather until then.\n\n${upgrade}\n\n— Weather Slip`,
   };
 }

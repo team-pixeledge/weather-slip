@@ -9,7 +9,7 @@ import {
 import { localDate, shippingDates } from "./dates";
 import { locationKey } from "./location";
 import { PLANS } from "./plans";
-import { countOrder, displaySettings, ensureShop, isCounted, providerFor } from "./shop.server";
+import { displaySettings, ensureShop, isCounted, providerFor } from "./shop.server";
 import {
   buildSnapshot,
   destinationToday,
@@ -199,14 +199,11 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
     return;
   }
 
-  // Plans count orders, not API calls. Only a merchant action — printing
-  // the slip (CREATE, or REFRESH for an order turned away earlier) or
-  // Refresh — may count an order, once. Address changes and pending fills
-  // only ever update an order that's already counted.
-  const counted =
-    job.reason === "CREATE" || job.reason === "REFRESH"
-      ? await countOrder(current, job.orderId, now)
-      : await isCounted(job.shop, job.orderId);
+  // Plans count prints, not API calls, and jobs never use plan units: the
+  // print (chargePrint) or Flow (markCounted) lists the order before
+  // queueing CREATE/REFRESH. Address changes and pending fills only ever
+  // update an order that's already listed.
+  const counted = await isCounted(job.shop, job.orderId);
   if (!counted) {
     if (job.reason === "ADDRESS_CHANGE" || job.reason === "PENDING_FILL") return;
     await saveVersion(prev, { ...base, status: "LIMIT_REACHED" });

@@ -1,6 +1,7 @@
 // Plan limits, prices and features live here, and only here: billing,
 // every server-side gate and the Plans page all read PLANS.
-// Plans count orders printed with weather (once per order), not API calls.
+// Plans count prints with weather — every order on every print, reprints
+// included (user decision 2026-10-14) — not API calls.
 import type { OrderView } from "./order-views";
 import type { SlipOptions, SlipTemplate } from "./slip";
 
@@ -190,8 +191,8 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
   const p = PLANS[id];
   const n = p.templates.length;
   return [
-    { text: `${p.ordersPerPeriod.toLocaleString("en-US")} orders/month printed with weather`, included: true },
-    { text: "Reprints always free", included: true },
+    { text: `${p.ordersPerPeriod.toLocaleString("en-US")} slip prints/month with weather`, included: true },
+    { text: "Each print and reprint counts once per order", included: true },
     {
       text:
         n === 1

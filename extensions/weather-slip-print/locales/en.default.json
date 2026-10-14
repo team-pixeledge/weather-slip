@@ -10,5 +10,5 @@
   "label": "Shipping label (4×6 / 4×4)",
   "tooManyTitle": "Too many orders selected",
   "tooManyBody": "Only the first {{max}} orders are printed. Select fewer to print the rest.",
-  "usage": "An order counts toward your Weather Slip plan the first time it's printed with weather. Reprints are free."
+  "usage": "Each order printed with weather uses one print from your Weather Slip plan, reprints included (the same order again within 10 minutes is free)."
 }

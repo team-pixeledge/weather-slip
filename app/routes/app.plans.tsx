@@ -180,16 +180,16 @@ const CARD = {
 
 const FAQ: [string, string][] = [
   [
-    "What counts as an order?",
-    "An order counts once, the first time it gets weather — when its packing slip is first printed, or when Shopify Flow saves its weather (Pro and Business). Reprints are always free, and orders you never print never count. The weather is saved on the order, so every reprint shows exactly the same forecast.",
+    "What counts toward my plan?",
+    "Every slip you print with weather: each order on each print uses one from your monthly allowance — printing 20 slips uses 20, and reprinting an order uses one more. Printing the same order again within 10 minutes is free (a reload, Shopify's print preview, a second copy for the box). Orders you never print never count; saving weather with Shopify Flow doesn't count either — the print does. The weather is saved on the order, so every reprint shows exactly the same forecast.",
   ],
   [
     "If I re-pack an order and print its slip again, is that charged?",
-    "No. A reprint — for a re-pack, a lost slip or a second parcel — uses the weather already saved on the order and never counts again.",
+    "Yes, one print — unless it's within 10 minutes of the last print of that order. The reprint shows the same saved forecast; it doesn't fetch new weather.",
   ],
   [
     "What happens when I reach my plan's limit?",
-    "Slips still print — just without the weather — until your monthly count resets or you upgrade. Orders already printed with weather keep it. You get an email at 80% and at 100%.",
+    "Slips still print — just without the weather, reprints included — until your monthly count resets or you upgrade. You get an email at 80% and at 100%.",
   ],
   [
     "When does my monthly count reset?",
@@ -197,7 +197,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "What does each plan include?",
-    "Free: 30 orders a month, the Classic template, unfulfilled orders. Starter: 500 orders, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list and Order Printer setup. Pro: 2,000 orders, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer and Shopify Flow. Business: 5,000 orders, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, and removes the Weather Slip mark.",
+    "Free: 30 prints a month, the Classic template, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list and Order Printer setup. Pro: 2,000 prints, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer and Shopify Flow. Business: 5,000 prints, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, and removes the Weather Slip mark.",
   ],
   [
     "Which orders are listed?",
@@ -217,7 +217,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "How does the Shopify Flow automation work? (Pro and Business)",
-    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it and the slip prints instantly. Each order still counts only once.",
+    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it and the slip prints instantly. Saving doesn't use your allowance; printing the slip does.",
   ],
   [
     "How do I get a custom template? (Business)",
@@ -304,7 +304,7 @@ function Checklist({ c }: { c: ChecklistState }) {
         <>
           Open <s-link href="/app">Orders</s-link>, tick orders and click{" "}
           <em>Print packing slips</em>. The slip opens in a new tab; print it
-          or save it as PDF. Reprints are free.
+          or save it as PDF. Each print uses one from your plan.
         </>
       ),
     },
@@ -482,8 +482,8 @@ export default function Plans() {
             Plan
           </div>
           <s-text color="subdued">
-            Start free, or pick a paid plan. Plans count orders printed with
-            weather — reprints are free. Change or cancel your plan here
+            Start free, or pick a paid plan. Plans count slips printed with
+            weather, reprints included. Change or cancel your plan here
             anytime.
           </s-text>
         </div>
@@ -513,12 +513,12 @@ export default function Plans() {
               </s-stack>
             </s-stack>
             <s-text color="subdued">
-              {d.used.toLocaleString()} of {limit.toLocaleString()} orders
-              printed with weather this month · resets {fmtDate(d.resetsAt)}
+              {d.used.toLocaleString()} of {limit.toLocaleString()} prints
+              with weather this month · resets {fmtDate(d.resetsAt)}
             </s-text>
             <div
               role="progressbar"
-              aria-label="Orders used this month"
+              aria-label="Prints used this month"
               aria-valuenow={pct}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -761,7 +761,7 @@ export default function Plans() {
                   <s-text tone="critical">
                     This cancels your {current.name} subscription in Shopify now
                     (unused time is credited). You&apos;ll have{" "}
-                    {PLANS.FREE.ordersPerPeriod} orders a month printed with
+                    {PLANS.FREE.ordersPerPeriod} prints a month with
                     weather.
                   </s-text>
                 )}

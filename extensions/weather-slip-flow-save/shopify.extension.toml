@@ -9,7 +9,8 @@ api_version = "2026-07"
 name = "Save weather on order"
 type = "flow_action"
 handle = "weather-slip-save-weather"
-description = "Save the destination weather forecast on the order (Weather Slip Pro and Business). Shopify's packing slip then shows it, and the slip prints instantly. Each order counts once toward your plan."
+uid = "e49ceca7-e1f2-4e37-c544-5d57106a29d9bb75ad62"
+description = "Save the destination weather forecast on the order (Weather Slip Pro and Business). Shopify's packing slip then shows it, and the slip prints instantly. Saving doesn't use your plan's prints; printing the slip does."
 runtime_url = "/flow/save-weather"
 
 [settings]

@@ -9,10 +9,10 @@ import { drainQueue } from "../lib/queue-runner.server";
 import { weatherForSlips } from "../lib/slip-weather.server";
 
 // Shopify Flow action "Save weather on order" (extensions/weather-slip-flow-save).
-// Same path as a first print: the order is counted once, its slip forecast is
-// saved on the order, and a CREATE job writes the summary metafield for
-// Shopify's own packing slip. Repeats (Flow retries, paid then fulfilled)
-// reuse the saved forecast and never count again.
+// Same lookup as a first print — the slip forecast is saved on the order and
+// a CREATE job writes the summary metafield for Shopify's own packing slip —
+// but it doesn't use a plan unit: the print that follows does. Repeats
+// (Flow retries, paid then fulfilled) reuse the saved forecast.
 //
 // Flow waits 10 s for a status: 200 = done, 4xx = failed with our message
 // shown in the run log (no retry), 5xx = retried for up to 36 h.
@@ -36,7 +36,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const work = (async () => {
     const { orders } = await ordersToPrint(admin, [orderId]);
     if (!orders.length) return "missing" as const;
-    const weather = await weatherForSlips(shop, orders, admin);
+    const weather = await weatherForSlips(shop, orders, admin, new Date(), false);
     runInBackground(drainQueue({ budgetMs: 20_000 }));
     return weather.get(orderId)?.status ?? "error";
   })();
@@ -51,10 +51,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response(null, { status: 200 });
   }
   if (status === "missing") return flowFailure(404, `Order ${orderId} wasn't found.`);
-  if (status === "limit_reached") {
-    // 422, not 429: a 429 makes Flow retry for 36 h against a monthly limit.
-    return flowFailure(422, "This month's order limit is reached, so weather wasn't saved. Upgrade in Weather Slip → Plans & pricing.");
-  }
   // "no_location" (pickup, POS, no address) has nothing to forecast — not a failure.
   if (status === "error") throw new Response("Weather lookup failed", { status: 503 });
   return new Response(null, { status: 200 });

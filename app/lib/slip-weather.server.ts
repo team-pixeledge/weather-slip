@@ -6,7 +6,7 @@ import { cacheKey } from "./location";
 import { notifyAdminLater } from "./alerts.server";
 import { orderShippingDates } from "./order-weather.server";
 import { query, type GraphqlClient, type PrintOrder } from "./orders.server";
-import { countOrder, providerFor } from "./shop.server";
+import { chargePrint, markCounted, providerFor } from "./shop.server";
 import { parseSavedSlipWeather, slipForecast, type SlipWeather } from "./slip";
 import { destinationToday } from "./snapshot";
 import { cachedForecast, cachedGeocode } from "./weather/cache.server";
@@ -54,20 +54,26 @@ async function saveForecasts(admin: GraphqlClient, fresh: [string, SlipWeather][
  * (from today at the destination through the provider's horizon — slips
  * are printed at packing time) and saves it on the order as the
  * weather_slip.forecast metafield. Every reprint reads that back: no API
- * call, no usage, the same slip every time.
+ * call, the same slip every time.
  *
- * This is where orders get counted: plans count orders whose slip is
- * printed with weather, not API calls. The first print of an order with a
- * usable destination counts it (once — reprints are free); at the limit it
- * prints without weather. An order without saved weather also gets a job
- * that writes its metafield, so Shopify's own slip/invoice shows it after.
+ * This is where usage is taken: plans count prints with weather, not API
+ * calls — every order on every print, reprints included (the same order
+ * again within 10 minutes is free). At the limit the slip prints without
+ * weather, even if weather is saved. An order without saved weather also
+ * gets a job that writes its metafield, so Shopify's own slip shows it.
  */
 export async function weatherForSlips(
   shop: Shop,
   orders: PrintOrder[],
   admin: GraphqlClient,
   now = new Date(),
+  /** false: Shopify Flow saving ahead of a print — mark, don't charge. */
+  charge = true,
 ): Promise<Map<string, SlipWeather>> {
+  // Each printed order with weather uses one plan unit, reprints included
+  // (chargePrint; a repeat within 10 minutes is free).
+  const take = async (id: string) =>
+    charge ? chargePrint(shop, id, now) : (await markCounted(shop.shop, id, now), true);
   const provider = providerFor();
   const ids = orders.map((o) => o.id.slice(o.id.lastIndexOf("/") + 1));
   const snaps = await prisma.$queryRaw<
@@ -100,7 +106,19 @@ export async function weatherForSlips(
       // Printed before: reuse the forecast saved on the order.
       const saved = parseSavedSlipWeather(order.savedForecast?.value);
       if (saved) {
-        out.set(id, saved);
+        // No weather API call, but a reprint is still a print.
+        out.set(
+          id,
+          (await take(id))
+            ? saved
+            : {
+                status: "limit_reached",
+                city: saved.city,
+                countryCode: saved.countryCode,
+                dispatch: saved.dispatch,
+                delivery: saved.delivery,
+              },
+        );
         return;
       }
       const snap = snapBy.get(id);
@@ -125,12 +143,12 @@ export async function weatherForSlips(
           out.set(id, { status: "no_location", ...place, dispatch, delivery });
           return;
         }
-        if (!(await countOrder(shop, id, now))) {
+        if (!(await take(id))) {
           out.set(id, { status: "limit_reached", ...place, dispatch, delivery });
           return;
         }
         if (snap?.status !== "OK" && snap?.status !== "PENDING_DATES") {
-          // Already counted above, so the job won't count it again.
+          // Listed above, so the job may run (jobs never charge).
           await enqueue(shop.shop, id, snap ? "REFRESH" : "CREATE");
         }
         const forecast = await forecastFor(point);

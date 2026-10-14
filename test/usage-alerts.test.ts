@@ -22,7 +22,7 @@ describe("usage alerts", () => {
     const o = { shopName: "Green Leaf", planName: "Free", used: 24, limit: 30, resetsAt: "2026-11-11T00:00:00Z", url: "U", canUpgrade: true };
     const warn = usageEmail(80, o);
     expect(warn.subject).toContain("80%");
-    expect(warn.text).toContain("24 of the 30 orders");
+    expect(warn.text).toContain("24 of the 30 prints");
     expect(warn.text).toContain("Upgrade your plan");
     const full = usageEmail(100, { ...o, used: 30 });
     expect(full.subject).toContain("limit");

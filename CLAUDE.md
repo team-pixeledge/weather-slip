@@ -45,17 +45,18 @@ and deploy traps this app's config already avoids).
   email or phone. Jobs hold only the order ID, never the payload.
 - **Weather cache is shared across shops**, keyed by provider + 0.1° grid
   cell, 3h TTL (`cache.server.ts`); geocodes 30 days.
-- **Plans count orders, not API calls** (user decision 2026-10-12): an
-  order counts once, ever, the first time a merchant action gets it weather
-  — printing its slip with a usable destination, or Refresh. Reprints, later
-  months, address changes and pending fills never count. `countOrder`
-  (`shop.server.ts`) inserts the `CountedOrder (shop, orderId)` row and takes
-  `consumeUsage` in one transaction; at the limit the row rolls back so the
-  order can be counted later. Jobs: CREATE/REFRESH may count, ADDRESS_CHANGE/
-  PENDING_FILL only proceed for already-counted orders. Verified on a local
-  DB: reprint free, 4 concurrent prints of one order → 1 count, refused at
-  50/50 with no row left, counted after the period resets. Migration
-  `counted_orders` backfills orders that already had weather.
+- **Plans count prints, not API calls** (user decision 2026-10-14, replacing
+  "each order once, reprints free" from 2026-10-12): every order on every
+  print with weather uses one unit, reprints included. `chargePrint`
+  (`shop.server.ts`) upserts `CountedOrder` and only charges if
+  `lastPrintedAt` is null or older than `PRINT_RECHARGE_MS` (10 min — so the
+  admin print preview, a reload or a double-click don't each charge), then
+  takes `consumeUsage` in the same transaction; at the limit it rolls back.
+  At the limit even a saved forecast prints as "plan limit reached".
+  Shopify Flow only `markCounted`s (no unit); jobs never charge and only run
+  for orders in `CountedOrder`. Upsert semantics checked on Postgres
+  (PGlite) 2026-10-14: charge / free within 10 min / charge after / rollback
+  keeps the old timestamp. Usage still resets every 30 days.
 
 ## Orders page + printed packing slips (added 2026-10-12)
 
@@ -89,11 +90,11 @@ PDF (no headless Chrome on Vercel).
   identical slip. Only "ok" forecasts are saved, so a limit-reached or
   no-address print can still get weather later. The slip reuses the
   snapshot's dispatch/delivery dates when one exists.
-- **Plan limits on print:** each order with a usable destination goes
-  through `countOrder` (no destination → no weather, no count); refused →
-  the slip prints "plan limit reached" instead of weather. An order without
-  saved weather then gets a CREATE/REFRESH job (it's already counted, so the
-  job doesn't count it again).
+- **Plan limits on print:** each order with a usable destination (or saved
+  weather) goes through `chargePrint` (no destination → no weather, no
+  charge); refused → the slip prints "plan limit reached" instead of
+  weather. An order without saved weather then gets a CREATE/REFRESH job
+  (jobs never charge).
 - **Protected customer data:** slips print the customer name, street
   address and phone. They're read from Shopify per print and never stored —
   but the Partner Dashboard request must now cover **name, address and
@@ -206,7 +207,8 @@ app's `/print/admin?kind&ids&tpl` (relative = app URL). That route uses
 `authenticate.admin` + `cors` (the admin sends a session token), renders
 with the same `renderPrint` as `/print/slips` but with no toolbar or
 auto-print, and allows the admin to frame it (`frame-ancestors`). Opening
-the preview counts an order's usage, same as printing from the app.
+the preview uses a print, same as printing from the app (a repeat within
+10 minutes is free, so re-rendering the preview doesn't charge again).
 
 ## Plans & billing (added 2026-10-12, reworked same day)
 
@@ -255,9 +257,8 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
   forecast): `NO_SHIPPING_FILTER` (`delivery_method` pick-up/retail) in
   every list query, plus a post-filter for POS rows with no address. The
   filter syntax wasn't run against a real store yet — check on a dev store.
-- **Re-packing/reprints stay free** (an order counts once, ever). The user
-  raised whether a re-pack should cost (2026-10-14) — unresolved; don't
-  change counting without their decision.
+- **Every print counts, reprints/re-packs included** (user decision
+  2026-10-14) — see "Plans count prints" above.
 
 ## Shopify Flow action (added 2026-10-14, Pro and Business)
 
