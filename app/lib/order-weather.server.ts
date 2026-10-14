@@ -213,7 +213,7 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
     return;
   }
 
-  const provider = providerFor(current);
+  const provider = providerFor();
   let point: GeoPoint | null =
     addr.latitude != null && addr.longitude != null
       ? { lat: addr.latitude, lon: addr.longitude }

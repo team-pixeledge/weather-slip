@@ -60,8 +60,8 @@ describe("plans", () => {
     const pro = planFeatures("PRO");
     const business = planFeatures("BUSINESS");
     expect(free.length).toBe(business.length);
-    expect(free.find((f) => f.text.includes("own OpenWeather"))!.included).toBe(false);
-    expect(pro.find((f) => f.text.includes("own OpenWeather"))!.included).toBe(false);
+    expect(free.find((f) => f.text.includes("Dispatch-day"))!.included).toBe(false);
+    expect(pro.every((f) => f.included)).toBe(true);
     expect(business.every((f) => f.included)).toBe(true);
     // Free stores do get weather on Shopify's own packing slip.
     expect(free.find((f) => f.text.includes("Shopify's own packing slip"))!.included).toBe(true);

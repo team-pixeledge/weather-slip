@@ -9,7 +9,6 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
-import { decrypt, encrypt, maskSecret } from "../lib/crypto.server";
 import { addDays } from "../lib/dates";
 import { formatSummary, type DisplaySettings, type Unit } from "../lib/format";
 import { PLANS } from "../lib/plans";
@@ -18,14 +17,6 @@ import { ensureShop } from "../lib/shop.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
-  let savedKey: string | null = null;
-  if (shop.weatherApiKeyEnc) {
-    try {
-      savedKey = maskSecret(decrypt(shop.weatherApiKeyEnc));
-    } catch {
-      savedKey = "unreadable — please re-enter";
-    }
-  }
   return {
     settings: {
       unit: shop.unit,
@@ -39,7 +30,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       skipWeekends: shop.skipWeekends,
     },
     plan: PLANS[shop.plan],
-    savedKey,
   };
 };
 
@@ -48,7 +38,7 @@ const clampDays = (v: unknown) =>
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const shop = await ensureShop(session.shop);
+  await ensureShop(session.shop);
   const body = (await request.json()) as Record<string, unknown>;
   const unit: Unit =
     body.unit === "F" || body.unit === "BOTH" ? body.unit : "C";
@@ -65,11 +55,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     transitDays: clampDays(body.transitDays),
     skipWeekends: body.skipWeekends === true,
   };
-  if (PLANS[shop.plan].ownApiKey && typeof body.apiKey === "string") {
-    const key = body.apiKey.trim();
-    if (key === "") data.weatherApiKeyEnc = null;
-    else if (key.length <= 200) data.weatherApiKeyEnc = encrypt(key);
-  }
   await prisma.shop.update({ where: { shop: session.shop }, data });
   return { ok: true };
 };
@@ -111,7 +96,6 @@ const SAMPLE = {
 export default function Settings() {
   const loaded = useLoaderData<typeof loader>();
   const [s, setS] = useState(loaded.settings);
-  const [apiKey, setApiKey] = useState("");
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
@@ -145,14 +129,13 @@ export default function Settings() {
   // Save stays faded until something differs from what's saved (the
   // loader re-runs after a save, so it fades again once stored).
   const dirty =
-    apiKey !== "" ||
     (Object.keys(s) as (keyof typeof s)[]).some(
       (k) => s[k] !== loaded.settings[k],
     );
 
   const save = () =>
     fetcher.submit(
-      { ...s, ...(apiKey !== "" ? { apiKey } : {}) },
+      { ...s },
       { method: "POST", encType: "application/json" },
     );
 
@@ -229,70 +212,6 @@ export default function Settings() {
           Once an order ships, its real fulfillment date and the carrier&apos;s
           estimated delivery date are used instead, when Shopify has them.
         </s-paragraph>
-      </s-section>
-
-      <s-section heading="Weather API">
-        {loaded.plan.ownApiKey ? (
-          <s-stack direction="block" gap="base">
-            <s-text-field
-              label="Your OpenWeather API key (optional)"
-              details={
-                loaded.savedKey
-                  ? `Your key is saved (${loaded.savedKey}) and in use. It's never shown in full — type a new one only to replace it.`
-                  : "Uses the app's own key if empty."
-              }
-              placeholder={loaded.savedKey ? `Saved key ${loaded.savedKey}` : undefined}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.currentTarget.value)}
-            />
-            <s-box
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
-              background="subdued"
-            >
-              <s-stack direction="block" gap="small-200">
-                <s-text type="strong">How to get your key (free)</s-text>
-                <s-ordered-list>
-                  <s-list-item>
-                    Create a free account at{" "}
-                    <s-link
-                      href="https://home.openweathermap.org/users/sign_up"
-                      target="_blank"
-                    >
-                      openweathermap.org/users/sign_up
-                    </s-link>{" "}
-                    and confirm your email.
-                  </s-list-item>
-                  <s-list-item>
-                    Open{" "}
-                    <s-link
-                      href="https://home.openweathermap.org/api_keys"
-                      target="_blank"
-                    >
-                      My API keys
-                    </s-link>{" "}
-                    (your name → My API keys).
-                  </s-list-item>
-                  <s-list-item>
-                    Copy the key under “Key” (or create one named “Weather
-                    Slip”).
-                  </s-list-item>
-                  <s-list-item>Paste it above and click Save.</s-list-item>
-                </s-ordered-list>
-                <s-text color="subdued">
-                  A new key can take up to 2 hours to start working; until then
-                  the app&apos;s own key is used, so nothing breaks.
-                </s-text>
-              </s-stack>
-            </s-box>
-          </s-stack>
-        ) : (
-          <s-paragraph>
-            Weather is included in your plan. The Business plan can use its own OpenWeather
-            API key.
-          </s-paragraph>
-        )}
       </s-section>
     </s-page>
   );

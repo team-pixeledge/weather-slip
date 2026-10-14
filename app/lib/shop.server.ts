@@ -1,6 +1,5 @@
 import type { Prisma, Shop } from "@prisma/client";
 import prisma from "../db.server";
-import { decrypt } from "./crypto.server";
 import type { DisplaySettings } from "./format";
 import { PLANS, USAGE_PERIOD_DAYS } from "./plans";
 import { sanitizeDesign, type SlipOptions } from "./slip";
@@ -77,27 +76,14 @@ function envKeys(name: string): string[] {
 }
 
 /**
- * WEATHER_PROVIDER picks the engine (default OpenWeather). A Pro merchant's
- * own key is tried first, with the app's keys behind it as failover for a
- * rejected key.
+ * WEATHER_PROVIDER picks the engine (default OpenWeather). Always the app's
+ * own keys — merchants can't bring their own.
  */
-export function providerFor(shop: Shop): WeatherProvider {
-  let own: string | null = null;
-  if (PLANS[shop.plan].ownApiKey && shop.weatherApiKeyEnc) {
-    try {
-      own = decrypt(shop.weatherApiKeyEnc);
-    } catch {
-      // Unreadable (e.g. ENCRYPTION_KEY rotated) — fall back to ours rather
-      // than failing every order.
-    }
-  }
+export function providerFor(): WeatherProvider {
   if (process.env.WEATHER_PROVIDER === "open-meteo") {
-    return new OpenMeteoProvider(own ?? (process.env.OPEN_METEO_API_KEY || null));
+    return new OpenMeteoProvider(process.env.OPEN_METEO_API_KEY || null);
   }
-  return new OpenWeatherProvider(
-    [...(own ? [own] : []), ...envKeys("OPENWEATHER_API_KEYS")],
-    watchOpenWeather,
-  );
+  return new OpenWeatherProvider(envKeys("OPENWEATHER_API_KEYS"), watchOpenWeather);
 }
 
 /**

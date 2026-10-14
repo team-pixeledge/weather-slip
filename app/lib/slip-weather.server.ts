@@ -68,7 +68,7 @@ export async function weatherForSlips(
   admin: GraphqlClient,
   now = new Date(),
 ): Promise<Map<string, SlipWeather>> {
-  const provider = providerFor(shop);
+  const provider = providerFor();
   const ids = orders.map((o) => o.id.slice(o.id.lastIndexOf("/") + 1));
   const snaps = await prisma.$queryRaw<
     { orderId: string; status: string; dispatchDate: string | null; deliveryDate: string | null }[]

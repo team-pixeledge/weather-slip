@@ -10,7 +10,6 @@ export interface PlanLimits {
   /** Order Printer / email snippets and the print action. */
   allTemplates: boolean;
   dispatchForecast: boolean;
-  ownApiKey: boolean;
   /** One-line pitch for the Plans page. */
   tagline: string;
   /** Badge on the plan card (e.g. "Most popular"). */
@@ -24,7 +23,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     ordersPerPeriod: 30,
     allTemplates: false,
     dispatchForecast: false,
-    ownApiKey: false,
     tagline: "For trying it out and small shops.",
   },
   STARTER: {
@@ -33,7 +31,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     ordersPerPeriod: 500,
     allTemplates: true,
     dispatchForecast: true,
-    ownApiKey: false,
     tagline: "For growing shops shipping every day.",
     highlight: "Most popular",
   },
@@ -43,7 +40,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     ordersPerPeriod: 2000,
     allTemplates: true,
     dispatchForecast: true,
-    ownApiKey: false,
     tagline: "For busy shops shipping in volume.",
   },
   BUSINESS: {
@@ -52,8 +48,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     ordersPerPeriod: 5000,
     allTemplates: true,
     dispatchForecast: true,
-    ownApiKey: true,
-    tagline: "For high-volume brands that want their own weather key.",
+    tagline: "For high-volume brands shipping thousands of orders.",
   },
 };
 
@@ -84,7 +79,6 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
     { text: "Dispatch-day forecast in saved weather", included: p.dispatchForecast },
     { text: "Weather on Shopify's own packing slip", included: true },
     { text: "Order Printer & Order Printer Pro setup", included: p.allTemplates },
-    { text: "Use your own OpenWeather API key", included: p.ownApiKey },
   ];
 }
 

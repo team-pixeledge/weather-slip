@@ -177,10 +177,6 @@ const FAQ: [string, string][] = [
     "What customer data does the app keep?",
     "None of your customers' names, street addresses, phone numbers or emails are stored — they're read from Shopify only while printing. The app keeps the city, country and the forecast for each printed order.",
   ],
-  [
-    "Can I use my own OpenWeather API key?",
-    "Yes, on the Business plan: add it in Settings → Weather API. If your key ever stops working, the app falls back to its own so slips keep printing.",
-  ],
 ];
 
 const fmtDate = (iso: string) =>

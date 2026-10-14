@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-// AES-256-GCM for merchant-supplied API keys at rest. ENCRYPTION_KEY is 32
-// random bytes, base64 (`openssl rand -base64 32`). Rotating it makes stored
-// keys unreadable — merchants would have to re-enter them.
+// AES-256-GCM for secrets at rest (the Storefront token). ENCRYPTION_KEY is 32
+// random bytes, base64 (`openssl rand -base64 32`). Rotating it makes the stored
+// token unreadable — a fresh one is made on next use.
 function key(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) throw new Error("ENCRYPTION_KEY is not set");

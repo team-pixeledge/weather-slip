@@ -80,7 +80,7 @@ model Shop {
   transitDays  Int     @default(3)
   skipWeekends Boolean @default(true)
 
-  // Merchant's own weather API key (Pro), AES-256-GCM encrypted — see crypto.server.ts.
+  // Unused since 2026-10-14 (merchants can't bring their own weather key).
   weatherApiKeyEnc String?
 
   // Packing slip printed from the app (Packing slip page).

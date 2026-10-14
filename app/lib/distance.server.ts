@@ -114,7 +114,7 @@ export async function distancesForSlips(
   from: string,
   now = new Date(),
 ): Promise<Map<string, SlipDistance[]>> {
-  const provider = providerFor(shop);
+  const provider = providerFor();
   // One geocode per place per print run (and cached 30 days across runs).
   const geo = new Map<string, Promise<LatLon | null>>();
   const pointOf = (p: { city: string | null; zip: string | null; countryCode: string | null; lat: number | null; lon: number | null }) => {
