@@ -97,8 +97,8 @@ export function shippingDates(
 }
 
 /** "Thu 17 Oct" — short enough for a slip, unambiguous across locales. */
-export function shortDay(date: IsoDate): string {
-  return new Intl.DateTimeFormat("en-GB", {
+export function shortDay(date: IsoDate, locale = "en-GB"): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "UTC",
     weekday: "short",
     day: "numeric",

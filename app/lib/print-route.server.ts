@@ -12,6 +12,7 @@ import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, res
 import { slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 import { distancesForSlips } from "./distance.server";
+import { PLANS, planSlipOptions, plansWith } from "./plans";
 
 // These pages carry customer names and addresses: never cache them, never
 // leak the URL (it holds the print token) in a Referer, never let them be
@@ -77,12 +78,27 @@ async function renderPrint(
   ids: string[],
   kind: PrintKind,
   tpl: string | null,
-  opts: { autoPrint: boolean; chrome: boolean; frameAncestors?: string },
+  opts: { autoPrint: boolean; chrome: boolean; frameAncestors?: string; fromShopify?: boolean },
 ): Promise<Response> {
   if (ids.length === 0) return message(400, "No orders selected.");
 
   const shop = await prisma.shop.findUnique({ where: { shop: shopDomain } });
   if (!shop || shop.uninstalledAt) return message(403, "Weather Slip isn't installed on this store.");
+
+  // Plan gates (the UI hides these too; this is the enforcement).
+  const plan = PLANS[shop.plan];
+  if (opts.fromShopify && !plan.printFromShopify) {
+    return message(
+      403,
+      `Printing from Shopify's Orders page is on the ${plansWith((p) => p.printFromShopify)} plans. Open Weather Slip → Orders to print, or upgrade in Weather Slip → Plans & pricing.`,
+    );
+  }
+  if (kind === "customers" && !plan.customerList) {
+    return message(
+      403,
+      `The customer list is on the ${plansWith((p) => p.customerList)} plans. Upgrade in Weather Slip → Plans & pricing.`,
+    );
+  }
 
   const { admin } = await unauthenticated.admin(shopDomain);
   const { shop: shopInfo, orders } = await ordersToPrint(admin, ids);
@@ -93,15 +109,20 @@ async function renderPrint(
   const doc = { timeZone, nonce, autoPrint: opts.autoPrint, chrome: opts.chrome };
   let html: string;
   if (kind === "customers") {
-    html = renderCustomerList(shopInfo, orders, doc);
+    html = renderCustomerList(shopInfo, orders, {
+      ...doc,
+      mark: !plan.removeBranding || slipOptions(shop).design.showBranding,
+    });
   } else {
     const weather = await weatherForSlips(shop, orders, admin);
     // Orders that had no snapshot yet were queued; get them saved now.
     runInBackground(drainQueue({ budgetMs: 20_000 }));
     // The shop's saved slip settings; a tpl picks another template for this
-    // one print.
-    const slip = slipOptions(shop);
-    if (isSlipTemplate(tpl)) slip.template = tpl;
+    // one print. planSlipOptions then drops whatever the plan doesn't
+    // include (a locked template falls back to Classic).
+    const saved = slipOptions(shop);
+    if (isSlipTemplate(tpl)) saved.template = tpl;
+    const slip = planSlipOptions(saved, shop.plan);
     const brandLogo = slip.design.logoSource === "store" ? await brandLogoIfFresh(admin, shop) : null;
     slip.design = resolveLogo(slip.design, brandLogo);
     const distance = slip.design.showDistance
@@ -137,5 +158,6 @@ export function adminPrintResponse(shopDomain: string, url: URL): Promise<Respon
     autoPrint: false,
     chrome: false,
     frameAncestors: "https://admin.shopify.com https://*.myshopify.com",
+    fromShopify: true,
   });
 }

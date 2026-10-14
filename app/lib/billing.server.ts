@@ -1,7 +1,14 @@
 import type { Plan } from "@prisma/client";
 import prisma from "../db.server";
 import type { GraphqlClient } from "./orders.server";
-import { billingName, planFromBillingName, PLANS, type PlanId } from "./plans";
+import {
+  billingName,
+  intervalFromBillingName,
+  planFromBillingName,
+  PLANS,
+  type BillingInterval,
+  type PlanId,
+} from "./plans";
 
 // Shopify Billing API, called directly (not the library's billing.request,
 // which always answers with a redirect and so hides Shopify's userErrors).
@@ -40,6 +47,8 @@ export interface ActiveSubscription {
 
 export interface BillingState {
   plan: PlanId;
+  /** MONTHLY on Free. */
+  interval: BillingInterval;
   subscription: ActiveSubscription | null;
   devStore: boolean;
   /** Whether a new charge for this shop would be a test charge. */
@@ -69,7 +78,8 @@ export async function syncPlan(admin: GraphqlClient, shop: string): Promise<Bill
     where: { shop, plan: { not: plan as Plan } },
     data: { plan: plan as Plan, usageAlertLevel: 0 },
   });
-  return { plan, subscription, devStore, testCharge };
+  const interval = subscription ? intervalFromBillingName(subscription.name) : "MONTHLY";
+  return { plan, interval, subscription, devStore, testCharge };
 }
 
 const SUBSCRIPTION_CREATE = `#graphql
@@ -78,6 +88,7 @@ const SUBSCRIPTION_CREATE = `#graphql
     $returnUrl: URL!
     $test: Boolean
     $price: Decimal!
+    $interval: AppPricingInterval!
   ) {
     appSubscriptionCreate(
       name: $name
@@ -92,7 +103,7 @@ const SUBSCRIPTION_CREATE = `#graphql
           plan: {
             appRecurringPricingDetails: {
               price: { amount: $price, currencyCode: USD }
-              interval: EVERY_30_DAYS
+              interval: $interval
             }
           }
         }
@@ -107,7 +118,7 @@ const SUBSCRIPTION_CREATE = `#graphql
 export async function createSubscription(
   admin: GraphqlClient,
   plan: PlanId,
-  opts: { returnUrl: string; test: boolean },
+  opts: { returnUrl: string; test: boolean; interval: BillingInterval },
 ): Promise<string> {
   const data = await gql<{
     appSubscriptionCreate: {
@@ -115,10 +126,13 @@ export async function createSubscription(
       userErrors: { message: string }[];
     };
   }>(admin, SUBSCRIPTION_CREATE, {
-    name: billingName(plan),
+    name: billingName(plan, opts.interval),
     returnUrl: opts.returnUrl,
     test: opts.test,
-    price: PLANS[plan].priceUsd,
+    // Yearly: one charge a year at the discounted price. Order limits stay
+    // per 30 days either way.
+    price: opts.interval === "ANNUAL" ? PLANS[plan].annualPriceUsd : PLANS[plan].priceUsd,
+    interval: opts.interval === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS",
   });
   const r = data.appSubscriptionCreate;
   if (!r.confirmationUrl) {

@@ -16,12 +16,15 @@ import {
   syncPlan,
 } from "../lib/billing.server";
 import {
+  annualSavingPct,
+  intervalFromBillingName,
   PAID_PLANS,
   PLAN_ORDER,
   PLANS,
   planFeatures,
   planFromBillingName,
   USAGE_PERIOD_DAYS,
+  type BillingInterval,
   type PlanId,
 } from "../lib/plans";
 import { ensureShop, usageSummary } from "../lib/shop.server";
@@ -48,9 +51,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const resetsAt = elapsed
     ? now + periodMs
     : shop.usagePeriodStart.getTime() + periodMs;
-  const failedJobs = await prisma.weatherJob.count({
-    where: { shop: session.shop, status: "FAILED" },
-  });
+  const [failedJobs, printedOrders, templateRequests] = await Promise.all([
+    prisma.weatherJob.count({ where: { shop: session.shop, status: "FAILED" } }),
+    prisma.countedOrder.count({ where: { shop: session.shop } }),
+    prisma.templateRequest.count({ where: { shop: session.shop } }),
+  ]);
+  // Onboarding checklist: steps the app can see are ticked from the shop's
+  // own data; the rest (done outside the app) stay as plain how-tos.
+  const features = PLANS[billing.plan];
+  const checklist = {
+    slipSaved: shop.slipDesign != null,
+    shippingDaysSet: shop.handlingDays !== 1 || shop.transitDays !== 3 || !shop.skipWeekends,
+    printed: printedOrders > 0,
+    requested: templateRequests > 0,
+    printFromShopify: features.printFromShopify,
+    flowAutomation: features.flowAutomation,
+    customTemplateRequest: features.customTemplateRequest,
+  };
 
   const usage = {
     ...usageSummary({ ...shop, plan: billing.plan }, now),
@@ -60,19 +77,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     usage,
     current: billing.plan,
+    interval: billing.interval,
     subscription: billing.subscription,
     testCharge: billing.testCharge,
     used: elapsed ? 0 : shop.usageCount,
     resetsAt: new Date(resetsAt).toISOString(),
     failedJobs,
+    checklist,
     returned: returned
-      ? { status: returned.status, plan: planFromBillingName(returned.name) }
+      ? {
+          status: returned.status,
+          plan: planFromBillingName(returned.name),
+          interval: intervalFromBillingName(returned.name),
+        }
       : chargeId
-        ? { status: "UNKNOWN", plan: null }
+        ? { status: "UNKNOWN", plan: null, interval: "MONTHLY" as BillingInterval }
         : null,
     plans: PLAN_ORDER.map((id) => ({
       id,
       ...PLANS[id],
+      annualSaving: annualSavingPct(id),
       features: planFeatures(id),
     })),
   };
@@ -89,12 +113,18 @@ export const action = async ({
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const target = String(form.get("plan")) as PlanId;
+  const interval: BillingInterval =
+    form.get("interval") === "ANNUAL" ? "ANNUAL" : "MONTHLY";
   if (!PLAN_ORDER.includes(target))
     return { ok: false, error: "Unknown plan." };
 
   try {
     const billing = await syncPlan(admin, session.shop);
-    if (billing.plan === target) return { ok: true, switchedTo: target };
+    if (
+      billing.plan === target &&
+      (target === "FREE" || billing.interval === interval)
+    )
+      return { ok: true, switchedTo: target };
 
     if (target === "FREE") {
       // Cancel first: never mark a shop Free while it's still being billed.
@@ -113,6 +143,7 @@ export const action = async ({
       const confirmationUrl = await createSubscription(admin, target, {
         returnUrl,
         test: billing.testCharge,
+        interval,
       });
       return { ok: true, confirmationUrl };
     }
@@ -124,7 +155,7 @@ export const action = async ({
     await notifyAdmin(
       "billing-failed",
       "A plan change failed",
-      `Shop: ${session.shop}\nTarget plan: ${target}\n\n${err instanceof Error ? err.message : String(err)}`,
+      `Shop: ${session.shop}\nTarget plan: ${target} (${interval})\n\n${err instanceof Error ? err.message : String(err)}`,
     );
     return {
       ok: false,
@@ -150,19 +181,55 @@ const CARD = {
 const FAQ: [string, string][] = [
   [
     "What counts as an order?",
-    "An order counts once, the first time its packing slip is printed with weather. Reprints are always free, and orders you never print never count. The weather is saved on the order, so every reprint shows exactly the same forecast.",
+    "An order counts once, the first time it gets weather — when its packing slip is first printed, or when Shopify Flow saves its weather (Pro and Business). Reprints are always free, and orders you never print never count. The weather is saved on the order, so every reprint shows exactly the same forecast.",
+  ],
+  [
+    "If I re-pack an order and print its slip again, is that charged?",
+    "No. A reprint — for a re-pack, a lost slip or a second parcel — uses the weather already saved on the order and never counts again.",
   ],
   [
     "What happens when I reach my plan's limit?",
-    "Slips still print — just without the weather — until your monthly count resets or you upgrade. Orders already printed with weather keep it.",
+    "Slips still print — just without the weather — until your monthly count resets or you upgrade. Orders already printed with weather keep it. You get an email at 80% and at 100%.",
   ],
   [
     "When does my monthly count reset?",
-    "Every 30 days from when you installed the app. The date is shown in the Current plan box above.",
+    "Every 30 days from when you installed the app, on monthly and yearly billing alike. The date is shown in the Current plan box above.",
+  ],
+  [
+    "What does each plan include?",
+    "Free: 30 orders a month, the Classic template, unfulfilled orders. Starter: 500 orders, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list and Order Printer setup. Pro: 2,000 orders, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer and Shopify Flow. Business: 5,000 orders, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, and removes the Weather Slip mark.",
+  ],
+  [
+    "Which orders are listed?",
+    "Free and Starter list unfulfilled and partially fulfilled orders — partially fulfilled ones print only the items still to ship. Pro and Business can also open fulfilled, unpaid, cancelled and archived orders. POS sales and local pickup orders are never listed: they have no shipping address, so there's nothing to forecast.",
+  ],
+  [
+    "What do the warning badges and the tip on the slip mean?",
+    "A dispatch or delivery day with a 60% or higher chance of rain, freezing temperatures (0 °C / 32 °F or below) or heat of 35 °C / 95 °F or more gets a coloured warning badge. If delivery day is one of those, the slip adds a one-line tip for your customer, such as “Rain expected on delivery day: please bring the parcel in quickly.” Turn the tip off in Packing slip → Weather.",
+  ],
+  [
+    "Can I print fewer forecast days, or a code warehouses can scan?",
+    "Yes. In Packing slip → Weather choose “Dispatch to delivery only” to show just the days the parcel travels. In Logo & header choose a QR code or a Code 128 barcode of the order number.",
+  ],
+  [
+    "Can slips print in another language? (Pro and Business)",
+    "Yes — English, French, German, Spanish, Italian, Portuguese or Dutch, set in Packing slip → Language. Headings, dates, weather and the thank-you line are translated; your own texts print as you type them.",
+  ],
+  [
+    "How does the Shopify Flow automation work? (Pro and Business)",
+    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it and the slip prints instantly. Each order still counts only once.",
+  ],
+  [
+    "How do I get a custom template? (Business)",
+    "Open Packing slip → Custom template, describe what you need and send it. We reply by email, and the request's status shows on that page.",
   ],
   [
     "How do upgrading and downgrading work?",
-    "Choose a plan and approve the charge on Shopify's screen; the new plan starts straight away and Shopify prorates the difference, so you're never charged twice for the same days. If you don't approve, nothing changes.",
+    "Choose a plan and approve the charge on Shopify's screen; the new plan starts straight away and Shopify prorates the difference, so you're never charged twice for the same days. If you don't approve, nothing changes. Settings for features a lower plan doesn't include are kept, so they come back if you upgrade again.",
+  ],
+  [
+    "Can I pay yearly?",
+    "Yes — switch the plan cards to Yearly. Starter is $49, Pro $99 and Business $199 a year, about two months free. Your order allowance is the same as monthly and resets every 30 days.",
   ],
   [
     "How do I cancel or go back to Free?",
@@ -170,7 +237,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "How is billing handled?",
-    "All charges go through Shopify and appear on your regular Shopify invoice, billed every 30 days. Development stores only ever get free test charges.",
+    "All charges go through Shopify and appear on your regular Shopify invoice. Development stores only ever get free test charges.",
   ],
   [
     "Where does the weather come from, and how far ahead?",
@@ -178,13 +245,184 @@ const FAQ: [string, string][] = [
   ],
   [
     "Which printers and paper sizes work?",
-    "Any printer your browser can print to. Choose A4, A5, US Letter or US Legal for full slips, or the Shipping label template for 4×6 or 4×4 thermal label printers.",
+    "Any printer your browser can print to. Choose A4, A5, US Letter or US Legal for full slips, or (on Business) the Shipping label template for 4×6 or 4×4 thermal label printers. The Minimal template saves ink on black-and-white printers.",
   ],
   [
     "What customer data does the app keep?",
     "None of your customers' names, street addresses, phone numbers or emails are stored — they're read from Shopify only while printing. The app keeps the city, country and the forecast for each printed order.",
   ],
 ];
+
+interface ChecklistState {
+  slipSaved: boolean;
+  shippingDaysSet: boolean;
+  printed: boolean;
+  requested: boolean;
+  printFromShopify: boolean;
+  flowAutomation: boolean;
+  customTemplateRequest: boolean;
+}
+
+/**
+ * Getting started. `done` null = done outside the app (Shopify Flow, the
+ * Shopify packing slip), so it can't be ticked; `plan` = the step needs a
+ * higher plan.
+ */
+function Checklist({ c }: { c: ChecklistState }) {
+  const steps: {
+    title: string;
+    body: React.ReactNode;
+    done: boolean | null;
+    plan?: string;
+  }[] = [
+    {
+      title: "Design your packing slip",
+      done: c.slipSaved,
+      body: (
+        <>
+          In <s-link href="/app/slip">Packing slip</s-link> pick a template and
+          set your logo, colours, language, forecast days, weather tip and
+          QR code or barcode. Save once to tick this off.
+        </>
+      ),
+    },
+    {
+      title: "Set your shipping days",
+      done: c.shippingDaysSet,
+      body: (
+        <>
+          In <s-link href="/app/settings">Settings</s-link> set handling and
+          transit days so dispatch and delivery land on the right days. (Ticks
+          once you change the defaults — 1 handling, 3 transit.)
+        </>
+      ),
+    },
+    {
+      title: "Print your first slip",
+      done: c.printed,
+      body: (
+        <>
+          Open <s-link href="/app">Orders</s-link>, tick orders and click{" "}
+          <em>Print packing slips</em>. The slip opens in a new tab; print it
+          or save it as PDF. Reprints are free.
+        </>
+      ),
+    },
+    {
+      title: "Print from Shopify's own Orders page",
+      done: null,
+      plan: c.printFromShopify ? undefined : "Starter",
+      body: (
+        <>
+          In Shopify&apos;s Orders, select orders → <em>Print</em> →{" "}
+          <em>Weather slip</em>, or open an order → <em>More actions</em> →{" "}
+          <em>Print</em>.
+        </>
+      ),
+    },
+    {
+      title: "Save weather automatically with Shopify Flow",
+      done: null,
+      plan: c.flowAutomation ? undefined : "Pro",
+      body: (
+        <>
+          In Shopify Flow: trigger <em>Order paid</em> or{" "}
+          <em>Order fulfilled</em> → action <em>Save weather on order</em>{" "}
+          (Weather Slip).
+        </>
+      ),
+    },
+    {
+      title: "Optional: weather on Shopify's own packing slip",
+      done: null,
+      body: (
+        <>
+          Copy the snippet from{" "}
+          <s-link href="/app/snippets">Shopify templates</s-link>.
+        </>
+      ),
+    },
+    ...(c.customTemplateRequest
+      ? [
+          {
+            title: "Ask for a custom template",
+            done: c.requested,
+            body: (
+              <>
+                Included in Business: describe it in{" "}
+                <s-link href="/app/slip">Packing slip → Custom template</s-link>.
+              </>
+            ),
+          },
+        ]
+      : []),
+  ];
+  const tracked = steps.filter((s) => s.done !== null && !s.plan);
+  const doneCount = tracked.filter((s) => s.done).length;
+  return (
+    <div style={CARD}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <span style={{ fontSize: 15, fontWeight: 650 }}>Get started</span>
+        <s-badge tone={doneCount === tracked.length ? "success" : "info"}>
+          {`${doneCount} of ${tracked.length} done`}
+        </s-badge>
+      </div>
+      <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+        {steps.map((s, i) => (
+          <li
+            key={s.title}
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+              fontSize: 13,
+              opacity: s.plan ? 0.6 : 1,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                flex: "none",
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 11,
+                fontWeight: 700,
+                color: s.done ? "#fff" : "#4a4a4a",
+                background: s.done ? "#29845a" : "#ebebeb",
+              }}
+            >
+              {s.done ? "✓" : i + 1}
+            </span>
+            <span>
+              <strong>{s.title}</strong>
+              {s.done && <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}> (done)</span>}
+              {s.plan && (
+                <>
+                  {" "}
+                  <s-badge>{`${s.plan} plan`}</s-badge>
+                </>
+              )}
+              <br />
+              <span style={{ color: "#4a4a4a" }}>{s.body}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -198,6 +436,8 @@ export default function Plans() {
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
   const [confirmFree, setConfirmFree] = useState(false);
+  // Which prices the cards show; starts at what the shop pays now.
+  const [interval, setPeriod] = useState<BillingInterval>(d.interval);
   const pending =
     fetcher.state !== "idle" ? String(fetcher.formData?.get("plan")) : null;
   const current = PLANS[d.current];
@@ -215,7 +455,7 @@ export default function Plans() {
 
   const choose = (plan: PlanId) => {
     setConfirmFree(false);
-    fetcher.submit({ plan }, { method: "POST" });
+    fetcher.submit({ plan, interval }, { method: "POST" });
   };
 
   const limit = current.ordersPerPeriod;
@@ -323,7 +563,7 @@ export default function Plans() {
         {d.returned?.status === "ACTIVE" && d.returned.plan && (
           <s-banner
             tone="success"
-            heading={`${PLANS[d.returned.plan].name} plan activated`}
+            heading={`${PLANS[d.returned.plan].name} plan activated${d.returned.interval === "ANNUAL" ? " (yearly)" : ""}`}
           >
             Thanks! Your new plan is active now.
           </s-banner>
@@ -342,8 +582,36 @@ export default function Plans() {
         )}
 
         {/* ---- plan cards ---- */}
-        <div id="all-plans" style={{ fontSize: 15, fontWeight: 650, marginBottom: -8 }}>
-          All plans
+        <div
+          id="all-plans"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: -4,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 650 }}>All plans</span>
+          <div
+            role="group"
+            aria-label="Billing period"
+            style={{ display: "flex", gap: 6, alignItems: "center" }}
+          >
+            <s-button
+              variant={interval === "MONTHLY" ? "primary" : "secondary"}
+              onClick={() => setPeriod("MONTHLY")}
+            >
+              Monthly
+            </s-button>
+            <s-button
+              variant={interval === "ANNUAL" ? "primary" : "secondary"}
+              onClick={() => setPeriod("ANNUAL")}
+            >
+              Yearly · save ~2 months
+            </s-button>
+          </div>
         </div>
         {/* Plain CSS grid: one row of cards on desktop, wrapping on narrow
           screens; cards sit on the page background like the App Store. */}
@@ -356,8 +624,11 @@ export default function Plans() {
           }}
         >
           {d.plans.map((p) => {
-            const isActive = p.id === d.current;
             const isFree = p.priceUsd === 0;
+            const samePlan = p.id === d.current;
+            // A paid plan is "active" only on the billing period shown.
+            const isActive = samePlan && (isFree || d.interval === interval);
+            const yearly = interval === "ANNUAL" && !isFree;
             const up = rank(p.id) > rank(d.current);
             const confirming = isFree && confirmFree;
             const label = isActive
@@ -366,9 +637,13 @@ export default function Plans() {
                 ? confirming
                   ? `Yes, cancel ${current.name} and switch`
                   : "Switch to Free"
-                : up
-                  ? `Upgrade to ${p.name}`
-                  : `Downgrade to ${p.name}`;
+                : samePlan
+                  ? yearly
+                    ? "Switch to yearly billing"
+                    : "Switch to monthly billing"
+                  : up
+                    ? `Upgrade to ${p.name}${yearly ? " (yearly)" : ""}`
+                    : `Downgrade to ${p.name}${yearly ? " (yearly)" : ""}`;
             return (
               <div
                 key={p.id}
@@ -402,22 +677,32 @@ export default function Plans() {
                   <span style={{ fontSize: 20, fontWeight: 700 }}>
                     {p.name}
                   </span>
-                  {isActive ? (
-                    <s-badge tone="success">Current plan</s-badge>
+                  {samePlan ? (
+                    <s-badge tone="success">
+                      {isFree || d.interval === "MONTHLY"
+                        ? "Current plan"
+                        : "Current plan · yearly"}
+                    </s-badge>
                   ) : p.highlight ? (
                     <s-badge tone="info">{p.highlight}</s-badge>
                   ) : null}
                 </s-stack>
                 <div>
                   <span style={{ fontSize: 30, fontWeight: 700 }}>
-                    {isFree ? "$0" : `$${p.priceUsd.toFixed(2)}`}
+                    {isFree
+                      ? "$0"
+                      : yearly
+                        ? `$${p.annualPriceUsd}`
+                        : `$${p.priceUsd.toFixed(2)}`}
                   </span>
-                  <s-text color="subdued"> / month</s-text>
+                  <s-text color="subdued">{yearly ? " / year" : " / month"}</s-text>
                   <div>
                     <s-text color="subdued">
                       {isFree
                         ? "Free forever · no card needed"
-                        : "Billed every 30 days by Shopify"}
+                        : yearly
+                          ? `≈ $${(p.annualPriceUsd / 12).toFixed(2)}/month · save ${p.annualSaving}% · billed yearly by Shopify`
+                          : "Billed every 30 days by Shopify"}
                     </s-text>
                   </div>
                 </div>
@@ -509,53 +794,8 @@ export default function Plans() {
             );
           })}
         </div>
-        {/* ---- How to use + FAQ ---- */}
-        <div style={CARD}>
-          <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 8 }}>
-            How to use Weather Slip
-          </div>
-          <ol
-            style={{
-              margin: 0,
-              paddingLeft: 20,
-              display: "grid",
-              gap: 6,
-              fontSize: 13,
-            }}
-          >
-            <li>
-              <strong>Print from Orders.</strong> Open{" "}
-              <s-link href="/app">Orders</s-link>, tick one or more orders and
-              click <em>Print packing slips</em> — or <em>Print slip</em> on a
-              single row. The slip opens in a new tab; print it or save it as
-              PDF.
-            </li>
-            <li>
-              <strong>Make it yours.</strong> In{" "}
-              <s-link href="/app/slip">Packing slip</s-link> pick a template
-              (Classic, Minimal, Detailed or Shipping label) and set your logo,
-              colours, fonts, line items and footer. The preview updates as you
-              go.
-            </li>
-            <li>
-              <strong>Or print from Shopify.</strong> In Shopify&apos;s own
-              Orders page select orders → <em>Print</em> → <em>Weather slip</em>
-              , or open an order → <em>More actions</em> → <em>Print</em> →{" "}
-              <em>Weather slip</em>.
-            </li>
-            <li>
-              <strong>Shipping days.</strong> In{" "}
-              <s-link href="/app/settings">Settings</s-link> set your handling
-              and transit days so the dispatch and delivery days on the slip are
-              right.
-            </li>
-            <li>
-              <strong>Optional:</strong> add the weather line to Shopify&apos;s
-              own packing slip or Order Printer from{" "}
-              <s-link href="/app/snippets">Shopify templates</s-link>.
-            </li>
-          </ol>
-        </div>
+        {/* ---- Onboarding checklist + FAQ ---- */}
+        <Checklist c={d.checklist} />
 
         <div style={CARD}>
           <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 4 }}>

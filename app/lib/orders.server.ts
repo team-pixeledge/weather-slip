@@ -39,13 +39,20 @@ export async function query<T>(
 
 // ---------- list ----------
 
+/**
+ * POS sales and local pickup have no shipping address — nothing to
+ * forecast — so they never appear in the list (user decision 2026-10-14).
+ * Local delivery and pickup points ship to an address and stay.
+ */
+export const NO_SHIPPING_FILTER = "NOT delivery_method:'pick-up' AND NOT delivery_method:retail";
+
 export function orderSearchQuery(
   view: OrderView,
   search: string,
   range: OrderRange = "any",
   now = new Date(),
 ): string {
-  const parts: string[] = [];
+  const parts: string[] = [NO_SHIPPING_FILTER];
   const base = (ORDER_VIEWS.find((v) => v.id === view) ?? ORDER_VIEWS[0]!).filter;
   if (base) parts.push(base);
   if (range !== "any") {
@@ -162,7 +169,9 @@ export async function listOrders(
     query: orderSearchQuery(opts.view, opts.search, opts.range) || null,
     ...(opts.before ? { last: size, before: opts.before } : { first: size, after: opts.after ?? null }),
   });
-  const rows: OrderRow[] = data.orders.nodes.map((o) => {
+  // Belt and braces for the filter above: a POS sale with no address.
+  const nodes = data.orders.nodes.filter((o) => o.shippingAddress || o.sourceName !== "pos");
+  const rows: OrderRow[] = nodes.map((o) => {
     const a = o.shippingAddress;
     return {
       id: numericId(o.id),

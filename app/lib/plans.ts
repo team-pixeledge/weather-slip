@@ -1,53 +1,118 @@
-// Plan limits and prices live here, and only here: shopify.server.ts builds
-// the Billing API config from PLANS, and the Plans page renders from it.
+// Plan limits, prices and features live here, and only here: billing,
+// every server-side gate and the Plans page all read PLANS.
 // Plans count orders printed with weather (once per order), not API calls.
+import type { OrderView } from "./order-views";
+import type { SlipOptions, SlipTemplate } from "./slip";
+
 export type PlanId = "FREE" | "STARTER" | "PRO" | "BUSINESS";
+export type BillingInterval = "MONTHLY" | "ANNUAL";
 
 export interface PlanLimits {
   name: string;
   priceUsd: number;
+  /** Yearly price (billed once a year by Shopify); 0 for Free. */
+  annualPriceUsd: number;
   ordersPerPeriod: number;
-  /** Order Printer / email snippets and the print action. */
+  /** Slip templates this plan may print (and pick as its default). */
+  templates: SlipTemplate[];
+  /** Orders page tabs; the first is the default view. */
+  orderViews: OrderView[];
+  /** Order Printer / Order Printer Pro snippet setup. */
   allTemplates: boolean;
   dispatchForecast: boolean;
+  /** Print action in Shopify's own Orders section. */
+  printFromShopify: boolean;
+  customerList: boolean;
+  /** Print slips in another language. */
+  languages: boolean;
+  /** Distance from the fulfillment location on the slip. */
+  distance: boolean;
+  /** Shopify Flow action: save an order's weather when it's paid/fulfilled. */
+  flowAutomation: boolean;
+  /** Ask us to build a template around your brand. */
+  customTemplateRequest: boolean;
+  /** May hide the "Weather Slip" mark printed at the foot of each page. */
+  removeBranding: boolean;
   /** One-line pitch for the Plans page. */
   tagline: string;
   /** Badge on the plan card (e.g. "Most popular"). */
   highlight?: string;
 }
 
+const ALL_VIEWS: OrderView[] = ["all", "unfulfilled", "unpaid", "open", "archived", "cancelled"];
+
 export const PLANS: Record<PlanId, PlanLimits> = {
   FREE: {
     name: "Free",
     priceUsd: 0,
+    annualPriceUsd: 0,
     ordersPerPeriod: 30,
+    templates: ["CLASSIC"],
+    orderViews: ["unfulfilled"],
     allTemplates: false,
     dispatchForecast: false,
+    printFromShopify: false,
+    customerList: false,
+    languages: false,
+    distance: false,
+    flowAutomation: false,
+    customTemplateRequest: false,
+    removeBranding: false,
     tagline: "For trying it out and small shops.",
   },
   STARTER: {
     name: "Starter",
     priceUsd: 4.99,
+    annualPriceUsd: 49,
     ordersPerPeriod: 500,
+    templates: ["CLASSIC", "MINIMAL"],
+    orderViews: ["unfulfilled"],
     allTemplates: true,
     dispatchForecast: true,
+    printFromShopify: true,
+    customerList: true,
+    languages: false,
+    distance: false,
+    flowAutomation: false,
+    customTemplateRequest: false,
+    removeBranding: false,
     tagline: "For growing shops shipping every day.",
-    highlight: "Most popular",
   },
   PRO: {
     name: "Pro",
     priceUsd: 9.99,
+    annualPriceUsd: 99,
     ordersPerPeriod: 2000,
+    templates: ["CLASSIC", "MINIMAL", "DETAILED"],
+    orderViews: ALL_VIEWS,
     allTemplates: true,
     dispatchForecast: true,
+    printFromShopify: true,
+    customerList: true,
+    languages: true,
+    distance: true,
+    flowAutomation: true,
+    customTemplateRequest: false,
+    removeBranding: false,
     tagline: "For busy shops shipping in volume.",
+    highlight: "Most popular",
   },
   BUSINESS: {
     name: "Business",
     priceUsd: 19.99,
+    annualPriceUsd: 199,
     ordersPerPeriod: 5000,
+    templates: ["CLASSIC", "MINIMAL", "DETAILED", "LABEL_4X6"],
+    orderViews: ALL_VIEWS,
     allTemplates: true,
     dispatchForecast: true,
+    printFromShopify: true,
+    customerList: true,
+    languages: true,
+    distance: true,
+    flowAutomation: true,
+    customTemplateRequest: true,
+    removeBranding: true,
     tagline: "For high-volume brands shipping thousands of orders.",
   },
 };
@@ -55,11 +120,66 @@ export const PLANS: Record<PlanId, PlanLimits> = {
 export const PLAN_ORDER: PlanId[] = ["FREE", "STARTER", "PRO", "BUSINESS"];
 export const PAID_PLANS: PlanId[] = ["STARTER", "PRO", "BUSINESS"];
 
-/** The Billing API subscription name for a paid plan ("Starter", "Pro", "Business"). */
-export const billingName = (id: PlanId) => PLANS[id].name;
+/** The cheapest plan that has a feature (for "Available on Pro and up"). */
+export function lowestPlanWith(has: (p: PlanLimits) => boolean): PlanId {
+  return PLAN_ORDER.find((id) => has(PLANS[id])) ?? "BUSINESS";
+}
+
+/** "Pro and Business", "Business", "Starter, Pro and Business". */
+export function plansWith(has: (p: PlanLimits) => boolean): string {
+  const names = PLAN_ORDER.filter((id) => has(PLANS[id])).map((id) => PLANS[id].name);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+}
+
+/** The cheapest plan that includes a template. */
+export const templatePlan = (t: SlipTemplate): PlanId => lowestPlanWith((p) => p.templates.includes(t));
+
+/**
+ * Billing API subscription name: "Pro" (monthly) or "Pro (yearly)". The
+ * name is how syncPlan maps Shopify's active subscription back to a plan
+ * and interval, so don't rename existing ones.
+ */
+export const billingName = (id: PlanId, interval: BillingInterval = "MONTHLY") =>
+  interval === "ANNUAL" ? `${PLANS[id].name} (yearly)` : PLANS[id].name;
 
 export function planFromBillingName(name: string): PlanId | null {
-  return PAID_PLANS.find((id) => PLANS[id].name === name) ?? null;
+  return PAID_PLANS.find((id) => name === billingName(id) || name === billingName(id, "ANNUAL")) ?? null;
+}
+
+export const intervalFromBillingName = (name: string): BillingInterval =>
+  name.endsWith("(yearly)") ? "ANNUAL" : "MONTHLY";
+
+/** Yearly saving vs 12 monthly payments, in whole percent. */
+export function annualSavingPct(id: PlanId): number {
+  const p = PLANS[id];
+  if (!p.priceUsd) return 0;
+  return Math.round((1 - p.annualPriceUsd / (p.priceUsd * 12)) * 100);
+}
+
+/**
+ * The slip options as this plan may print them. Settings are stored as the
+ * merchant chose them (so a downgrade and re-upgrade loses nothing) and
+ * clamped here at every render: a template the plan lacks falls back to
+ * Classic, and language, distance and hiding the mark need their plan.
+ */
+export function planSlipOptions(o: SlipOptions, plan: PlanId): SlipOptions {
+  const p = PLANS[plan];
+  return {
+    ...o,
+    template: p.templates.includes(o.template) ? o.template : "CLASSIC",
+    design: {
+      ...o.design,
+      language: p.languages ? o.design.language : "en",
+      showDistance: p.distance && o.design.showDistance,
+      showBranding: p.removeBranding ? o.design.showBranding : true,
+    },
+  };
+}
+
+/** A view this plan may open; anything else falls back to its default. */
+export function allowedView(view: OrderView, plan: PlanId): OrderView {
+  const views = PLANS[plan].orderViews;
+  return views.includes(view) ? view : views[0]!;
 }
 
 /**
@@ -68,17 +188,32 @@ export function planFromBillingName(name: string): PlanId | null {
  */
 export function planFeatures(id: PlanId): { text: string; included: boolean }[] {
   const p = PLANS[id];
+  const n = p.templates.length;
   return [
     { text: `${p.ordersPerPeriod.toLocaleString("en-US")} orders/month printed with weather`, included: true },
     { text: "Reprints always free", included: true },
-    { text: "Print one slip or many + customer list", included: true },
-    { text: "Print from Shopify's own Orders page", included: true },
-    { text: "4 templates, fully customisable", included: true },
+    {
+      text:
+        n === 1
+          ? "1 slip template (Classic)"
+          : n === 4
+            ? "All 4 slip templates incl. 4×6 shipping label"
+            : `${n} slip templates (${n === 2 ? "+ Minimal ink saver" : "+ Detailed with prices"})`,
+      included: true,
+    },
     { text: "Store logo, fonts, colours, paper sizes", included: true },
-    { text: "Forecast for every day to delivery", included: true },
-    { text: "Dispatch-day forecast in saved weather", included: p.dispatchForecast },
     { text: "Weather on Shopify's own packing slip", included: true },
+    { text: "Unfulfilled orders", included: true },
+    { text: "All orders: fulfilled, unpaid, cancelled, archived", included: p.orderViews.length > 1 },
+    { text: "Dispatch-day forecast in saved weather", included: p.dispatchForecast },
+    { text: "Print from Shopify's own Orders page", included: p.printFromShopify },
+    { text: "Customer list printout", included: p.customerList },
     { text: "Order Printer & Order Printer Pro setup", included: p.allTemplates },
+    { text: "Slips in 7 languages", included: p.languages },
+    { text: "Distance to the customer on the slip", included: p.distance },
+    { text: "Shopify Flow: save weather when paid or fulfilled", included: p.flowAutomation },
+    { text: "Custom template built for your brand", included: p.customTemplateRequest },
+    { text: "Remove the Weather Slip mark from prints", included: p.removeBranding },
   ];
 }
 

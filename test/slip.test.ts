@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrintOrder, PrintShop } from "../app/lib/orders.server";
-import { orderSearchQuery } from "../app/lib/orders.server";
+import { NO_SHIPPING_FILTER, orderSearchQuery } from "../app/lib/orders.server";
 import { signPrintToken, verifyPrintToken, PRINT_TOKEN_TTL_MS } from "../app/lib/print-token.server";
 import { escapeHtml, parseSavedSlipWeather, renderCustomerList, renderPackingSlips, slipForecast, type SlipWeather } from "../app/lib/slip";
 import type { ForecastPayload } from "../app/lib/weather/types";
@@ -32,23 +32,23 @@ describe("slipForecast", () => {
 describe("orderSearchQuery", () => {
   it("brackets the merchant's search so it can't widen the view", () => {
     expect(orderSearchQuery("unfulfilled", "")).toBe(
-      "status:open AND (fulfillment_status:unfulfilled OR fulfillment_status:partial)",
+      `${NO_SHIPPING_FILTER} AND status:open AND (fulfillment_status:unfulfilled OR fulfillment_status:partial)`,
     );
     expect(orderSearchQuery("open", "x OR status:closed")).toBe(
-      "status:open AND (x OR status:closed)",
+      `${NO_SHIPPING_FILTER} AND status:open AND (x OR status:closed)`,
     );
   });
 });
 
 describe("orderSearchQuery: views and date range", () => {
   const now = new Date("2026-10-12T09:00:00Z");
-  it("All orders has no status filter", () => {
-    expect(orderSearchQuery("all", "", "any", now)).toBe("");
-    expect(orderSearchQuery("all", "#1001", "any", now)).toBe("(#1001)");
+  it("All orders has no status filter, but never lists POS or pickup", () => {
+    expect(orderSearchQuery("all", "", "any", now)).toBe(NO_SHIPPING_FILTER);
+    expect(orderSearchQuery("all", "#1001", "any", now)).toBe(`${NO_SHIPPING_FILTER} AND (#1001)`);
   });
   it("adds a created_at bound for a range", () => {
     expect(orderSearchQuery("archived", "", "180", now)).toBe(
-      "status:closed AND created_at:>=2026-04-15",
+      `${NO_SHIPPING_FILTER} AND status:closed AND created_at:>=2026-04-15`,
     );
   });
 });

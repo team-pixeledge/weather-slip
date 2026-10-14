@@ -29,10 +29,10 @@ export function haversineKm(a: LatLon, b: LatLon): number {
 }
 
 /** "1,234 km", "8.4 mi" (one decimal under 10). */
-export function formatDistance(km: number, unit: DistanceUnit): string {
+export function formatDistance(km: number, unit: DistanceUnit, locale = "en-US"): string {
   const u = DISTANCE_UNITS.find((x) => x.id === unit) ?? DISTANCE_UNITS[0]!;
   const v = km * u.perKm;
-  const n = new Intl.NumberFormat("en-US", {
+  const n = new Intl.NumberFormat(locale, {
     maximumFractionDigits: v < 10 ? 1 : 0,
   }).format(v);
   return `${n} ${u.suffix}`;

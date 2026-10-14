@@ -14,10 +14,11 @@ import {
   type OrderRange,
   type OrderView,
 } from "../lib/order-views";
-import { ensureShop, usageSummary } from "../lib/shop.server";
+import { ensureShop, slipOptions, usageSummary } from "../lib/shop.server";
 import { UsageBanner } from "../components/UsageBanner";
 import { isSlipTemplate, SLIP_TEMPLATES, type SlipTemplate } from "../lib/slip";
 import { signPrintToken } from "../lib/print-token.server";
+import { allowedView, PLANS, planSlipOptions, plansWith, templatePlan } from "../lib/plans";
 
 // Laid out like Shopify's own Orders page (same tabs, columns and badges)
 // so merchants already know how to read it; printing is a bulk action on
@@ -65,10 +66,15 @@ function orderDate(iso: string): string {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
+  const shop = await ensureShop(session.shop);
+  const plan = PLANS[shop.plan];
   const viewParam = url.searchParams.get("view");
-  const view: OrderView = ORDER_VIEWS.some((v) => v.id === viewParam)
-    ? (viewParam as OrderView)
-    : "all";
+  // Free and Starter list unfulfilled (incl. partially fulfilled) orders
+  // only; the other views need Pro. Enforced here, not just in the UI.
+  const view: OrderView = allowedView(
+    ORDER_VIEWS.some((v) => v.id === viewParam) ? (viewParam as OrderView) : "all",
+    shop.plan,
+  );
   const search = (url.searchParams.get("q") ?? "").slice(0, 200);
   const rangeParam = url.searchParams.get("range");
   const range: OrderRange = ORDER_RANGES.some((r) => r.id === rangeParam)
@@ -78,7 +84,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const perParam = Number(url.searchParams.get("per"));
   const perPage = (PAGE_SIZES as readonly number[]).includes(perParam) ? perParam : DEFAULT_PAGE_SIZE;
 
-  const shop = await ensureShop(session.shop);
   const usage = { ...usageSummary(shop), canUpgrade: shop.plan !== "BUSINESS" };
 
   const { rows, pageInfo } = await listOrders(admin, {
@@ -103,7 +108,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     printToken: signPrintToken(session.shop),
     // Without read_all_orders Shopify only returns the last 60 days.
     allOrdersAccess: (session.scope ?? "").split(",").includes("read_all_orders"),
-    defaultTemplate: shop.slipTemplate as SlipTemplate,
+    // What this plan actually prints (a locked saved default falls back).
+    defaultTemplate: planSlipOptions(slipOptions(shop), shop.plan).template as SlipTemplate,
+    plan: {
+      templates: plan.templates,
+      orderViews: plan.orderViews,
+      customerList: plan.customerList,
+    },
+    viewsPlans: plansWith((p) => p.orderViews.length > 1),
+    customerListPlans: plansWith((p) => p.customerList),
   };
 };
 
@@ -120,6 +133,9 @@ export default function Orders() {
     defaultTemplate,
     allOrdersAccess,
     usage,
+    plan,
+    viewsPlans,
+    customerListPlans,
   } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
   const [, setParams] = useSearchParams();
@@ -220,6 +236,13 @@ export default function Orders() {
         </s-banner>
       )}
 
+      {plan.orderViews.length === 1 && (
+        <s-banner tone="info">
+          Your plan lists unfulfilled and partially fulfilled orders. Fulfilled, unpaid, cancelled
+          and archived orders are on {viewsPlans} — <s-link href="/app/plans">see plans</s-link>.
+        </s-banner>
+      )}
+
       {!allOrdersAccess && (
         <s-banner tone="info">
           Showing orders from the last 60 days. Shopify shows apps older orders only once
@@ -256,12 +279,16 @@ export default function Orders() {
                   if (isSlipTemplate(v)) setTemplate(v);
                 }}
               >
-                {SLIP_TEMPLATES.map((t) => (
-                  <s-option key={t.id} value={t.id}>
-                    {t.name}
-                    {t.id === defaultTemplate ? " (default)" : ""}
-                  </s-option>
-                ))}
+                {SLIP_TEMPLATES.map((t) => {
+                  const locked = !plan.templates.includes(t.id);
+                  return (
+                    <s-option key={t.id} value={t.id} disabled={locked}>
+                      {t.name}
+                      {t.id === defaultTemplate ? " (default)" : ""}
+                      {locked ? ` — ${PLANS[templatePlan(t.id)].name} plan` : ""}
+                    </s-option>
+                  );
+                })}
               </s-select>
               <s-button
                 variant="primary"
@@ -270,8 +297,14 @@ export default function Orders() {
               >
                 Print packing slips
               </s-button>
-              <s-button disabled={tooMany} onClick={() => openPrint("customers", selectedIds)}>
-                Print customer list
+              <s-button
+                disabled={tooMany || !plan.customerList}
+                onClick={() => openPrint("customers", selectedIds)}
+                {...(!plan.customerList
+                  ? { accessibilityLabel: `Print customer list — on ${customerListPlans}` }
+                  : {})}
+              >
+                {plan.customerList ? "Print customer list" : "Customer list (Starter+)"}
               </s-button>
               <s-button variant="tertiary" onClick={() => setSelected(new Map())}>
                 Clear
@@ -296,11 +329,15 @@ export default function Orders() {
                 value={view}
                 onChange={(e) => update({ view: e.currentTarget.value, after: null, before: null })}
               >
-                {ORDER_VIEWS.map((v) => (
-                  <s-option key={v.id} value={v.id}>
-                    {v.label}
-                  </s-option>
-                ))}
+                {ORDER_VIEWS.map((v) => {
+                  const locked = !plan.orderViews.includes(v.id);
+                  return (
+                    <s-option key={v.id} value={v.id} disabled={locked}>
+                      {v.label}
+                      {locked ? " — Pro plan" : ""}
+                    </s-option>
+                  );
+                })}
               </s-select>
               <s-search-field
                 label="Search and filter"

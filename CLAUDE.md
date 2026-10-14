@@ -10,7 +10,7 @@ changes; don't let it drift.
 Shopify **public** embedded app: saves destination weather (current +
 dispatch-day + delivery-day forecast) on each order as order metafields, so
 packing slips, invoices and emails can print it with one Liquid line.
-Free (30 orders) / Starter $4.99 (500) / Pro $9.99 (2,000) / Business $19.99 (5,000) — `app/lib/plans.ts` (2026-10-13). Scaffolded 2026-10-12
+Free (30 orders) / Starter $4.99 (500) / Pro $9.99 (2,000) / Business $19.99 (5,000), yearly $49/$99/$199 — `app/lib/plans.ts` (2026-10-13; feature ladder 2026-10-14, see "Plan ladder"). Scaffolded 2026-10-12
 from `Shopify/shopify-app-template-react-router` (React Router 7, Prisma,
 Polaris web components). Sibling app for conventions/lessons:
 `../store-performance-monitor` (its CLAUDE.md documents several Shopify CLI
@@ -159,6 +159,20 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   `shopify://shop_images/<file>` under a logo key (`findThemeLogoRef`) →
   Files API `filename:` lookup (read_files) → CDN URL.
 - The Orders page can override the template for one print (`?tpl=`).
+- **Language** (`SlipDesign.language`, `slip-i18n.ts`, 7 languages): every
+  printed string goes through `slipStrings`; dates/money/distance use the
+  locale (English keeps en-GB dates and en-US money as before). Provider
+  condition labels stay English in storage and are mapped at render by
+  keyword (`conditionOf`); unknown labels print as-is. Admin UI, customer
+  list and the summary metafield stay English.
+- **Bad weather**: dispatch/delivery days with ≥60% rain, min ≤0 °C or
+  max ≥35 °C (`BAD_WEATHER`) get coloured badges (`print-color-adjust:
+  exact`); a delivery-day one adds a one-line tip (`showTip`). Rain reads
+  "n% chance of rain" with a drop icon. `forecastRange: "trip"` shows
+  dispatch→delivery only. Minimal is ink-saving: hairlines, no fills.
+- No product image anywhere → the image column is dropped (no "No image").
+- **Order code**: `orderCode` none/qr/barcode — `order-code.ts`, QR via
+  `qrcode-generator`, Code 128-B hand-written (table + checksum tested).
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.
 
@@ -216,6 +230,53 @@ switch confirmed inline, "Compare all features" table.
 - Test charges while `SHOPIFY_BILLING_TEST` isn't "false", and always on
   development stores (`shop.plan.partnerDevelopment`). A test subscription
   only unlocks a plan in those same conditions.
+
+## Plan ladder (user decision 2026-10-14: higher plans must clearly get more)
+
+Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
+`planFeatures`. Enforced server-side, not just hidden in the UI:
+- **Templates** 1/2/3/4: Free Classic, Starter +Minimal, Pro +Detailed,
+  Business +Shipping label. **Order views**: Free/Starter only Unfulfilled
+  (incl. partially fulfilled) — `allowedView` in the Orders loader; Pro+ all.
+- Starter+: dispatch-day forecast, print action in Shopify's Orders
+  (`/print/admin` 403s on Free), customer list, Order Printer setup.
+- Pro+: slip language, distance, Shopify Flow action. Business: custom
+  template requests, hiding the Weather Slip mark.
+- **Settings are stored as chosen and clamped at every render** by
+  `planSlipOptions` (print route, Orders default, slip preview), so a
+  downgrade + re-upgrade loses nothing. Only the saved default template is
+  coerced to Classic on save if locked. The admin print extensions still
+  list all four templates; a locked one prints as Classic.
+- **Yearly billing**: subscription name "Pro (yearly)", `interval: ANNUAL`,
+  price `annualPriceUsd`. `planFromBillingName`/`intervalFromBillingName`
+  map names back — never rename existing subscription names. Usage still
+  resets every 30 days.
+- **POS and local pickup orders are never listed** (no address to
+  forecast): `NO_SHIPPING_FILTER` (`delivery_method` pick-up/retail) in
+  every list query, plus a post-filter for POS rows with no address. The
+  filter syntax wasn't run against a real store yet — check on a dev store.
+- **Re-packing/reprints stay free** (an order counts once, ever). The user
+  raised whether a re-pack should cost (2026-10-14) — unresolved; don't
+  change counting without their decision.
+
+## Shopify Flow action (added 2026-10-14, Pro and Business)
+
+`extensions/weather-slip-flow-save` (type `flow_action`, order_reference
+field) → `app/routes/flow.save-weather.tsx` via `authenticate.flow` (HMAC).
+Same path as a first print (`weatherForSlips`: count once, save the slip
+forecast, enqueue CREATE). Flow wants a status in 10 s: we wait up to 7 s,
+then finish in the background and return 200. 4xx bodies
+(`{message}`) show in the merchant's Flow run log: 402 plan, 422 limit
+reached (not 429 — that retries for 36 h), 404 order. Weather failure →
+503 so Flow retries. Needs `shopify app deploy` to exist in Flow.
+
+## Custom template requests (Business, added 2026-10-14)
+
+`TemplateRequest` table (migration `20261014120000_template_requests`),
+form on Packing slip, 3 per 30 days per shop, operator emailed via
+`sendAlertEmail`. Status (RECEIVED/IN_PROGRESS/DONE/DECLINED) is moved by
+hand in the DB; the merchant sees it on the page. Building the template
+itself is manual dev work.
 
 ## Operator alerts (added 2026-10-13)
 

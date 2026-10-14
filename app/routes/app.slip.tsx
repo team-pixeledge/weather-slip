@@ -33,16 +33,47 @@ import {
 import { sampleSlipData } from "../lib/slip-sample";
 import { DISTANCE_UNITS, type DistanceUnit } from "../lib/distance";
 import { listLocations } from "../lib/distance.server";
+import { PLANS, planSlipOptions, plansWith, templatePlan } from "../lib/plans";
+import { SLIP_LANGUAGES, type SlipLanguage } from "../lib/slip-i18n";
+import {
+  recentTemplateRequests,
+  shopContactEmail,
+  submitTemplateRequest,
+} from "../lib/template-request.server";
+import {
+  TEMPLATE_REQUEST_LIMITS,
+  TEMPLATE_REQUEST_STATUS_LABEL,
+} from "../lib/template-request";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
   // Fresh on every visit, so a logo changed in Settings → Brand shows here.
-  const [brandLogoUrl, locations] = await Promise.all([
+  const plan = PLANS[shop.plan];
+  const [brandLogoUrl, locations, requests, contactEmail] = await Promise.all([
     refreshBrandLogo(admin, shop),
     listLocations(admin),
+    recentTemplateRequests(session.shop),
+    plan.customTemplateRequest ? shopContactEmail(admin) : Promise.resolve(null),
   ]);
   return {
+    planId: shop.plan,
+    plan: {
+      name: plan.name,
+      templates: plan.templates,
+      languages: plan.languages,
+      distance: plan.distance,
+      removeBranding: plan.removeBranding,
+      customTemplateRequest: plan.customTemplateRequest,
+    },
+    upsell: {
+      languages: plansWith((p) => p.languages),
+      distance: plansWith((p) => p.distance),
+      removeBranding: plansWith((p) => p.removeBranding),
+      customTemplateRequest: plansWith((p) => p.customTemplateRequest),
+    },
+    requests: requests.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+    contactEmail,
     locations,
     options: slipOptions(shop),
     brandLogoUrl,
@@ -52,16 +83,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
+type ActionResult =
+  | { ok: true; kind: "saved" | "requested" }
+  | { ok: false; kind: "requested"; error: string };
+
+export const action = async ({ request }: ActionFunctionArgs): Promise<ActionResult> => {
   const { session } = await authenticate.admin(request);
   const body = (await request.json()) as Record<string, unknown>;
+  const shop = await ensureShop(session.shop);
+
+  if (body.intent === "template-request") {
+    const r = await submitTemplateRequest(session.shop, shop.plan, body);
+    return r.ok ? { ok: true, kind: "requested" } : { ok: false, kind: "requested", error: r.error };
+  }
+
+  // A template the plan doesn't include can't become the default. Other
+  // locked settings are stored as chosen and clamped at print
+  // (planSlipOptions), so a downgrade and re-upgrade loses nothing.
+  const template =
+    isSlipTemplate(body.template) && PLANS[shop.plan].templates.includes(body.template)
+      ? body.template
+      : "CLASSIC";
   // Whitelisted fields only — never pass the body to Prisma.
   const footer =
     typeof body.footer === "string" ? body.footer.slice(0, FOOTER_MAX) : null;
   await prisma.shop.update({
     where: { shop: session.shop },
     data: {
-      slipTemplate: isSlipTemplate(body.template) ? body.template : "CLASSIC",
+      slipTemplate: template,
       slipPaper: PAPER_SIZES.some((p) => p.id === body.paper)
         ? (body.paper as PaperSize)
         : "A4",
@@ -73,7 +122,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       slipDesign: { ...sanitizeDesign(body.design) },
     },
   });
-  return { ok: true };
+  return { ok: true, kind: "saved" };
 };
 
 const DEFAULT_THANKS = "Thank you for shopping with us!";
@@ -93,18 +142,33 @@ export default function PackingSlip() {
     setO({ ...o, design: { ...d, ...patch } });
 
   useEffect(() => {
-    if (fetcher.data?.ok) shopify.toast.show("Packing slip saved");
+    if (fetcher.data?.ok && fetcher.data.kind === "saved") shopify.toast.show("Packing slip saved");
   }, [fetcher.data, shopify]);
+
+  const plan = loaded.plan;
+  const requestFetcher = useFetcher<typeof action>();
+  const [req, setReq] = useState({
+    description: "",
+    referenceUrl: "",
+    contactEmail: loaded.contactEmail ?? "",
+  });
+  // Clear the form once per successful send (adjusting state during
+  // render, not in an effect); keep the text if the send failed.
+  const [handledRequest, setHandledRequest] = useState(requestFetcher.data);
+  if (requestFetcher.data !== handledRequest) {
+    setHandledRequest(requestFetcher.data);
+    if (requestFetcher.data?.ok) setReq((r) => ({ ...r, description: "", referenceUrl: "" }));
+  }
+  useEffect(() => {
+    if (requestFetcher.data?.ok) shopify.toast.show("Request sent — we'll reply by email");
+  }, [requestFetcher.data, shopify]);
 
   // The preview uses what will actually be saved (e.g. a non-Shopify logo
   // link is dropped), so it never shows something the print won't.
-  const previewOptions = useMemo(
-    () => ({
-      ...o,
-      design: resolveLogo(sanitizeDesign(o.design), loaded.brandLogoUrl),
-    }),
-    [o, loaded.brandLogoUrl],
-  );
+  const previewOptions = useMemo(() => {
+    const p = planSlipOptions({ ...o, design: sanitizeDesign(o.design) }, loaded.planId);
+    return { ...p, design: resolveLogo(p.design, loaded.brandLogoUrl) };
+  }, [o, loaded.brandLogoUrl, loaded.planId]);
   const preview = useMemo(() => {
     const { shop, order, weather, distance } = sampleSlipData(
       loaded.today,
@@ -187,6 +251,8 @@ export default function PackingSlip() {
           >
             {SLIP_TEMPLATES.map((t) => {
               const selected = o.template === t.id;
+              const locked = !plan.templates.includes(t.id);
+              const needs = PLANS[templatePlan(t.id)].name;
               return (
                 <s-clickable
                   key={t.id}
@@ -195,24 +261,110 @@ export default function PackingSlip() {
                   borderWidth={selected ? "large" : "base"}
                   borderColor={selected ? "strong" : "base"}
                   background={selected ? "subdued" : "base"}
-                  accessibilityLabel={`${t.name} template${selected ? " (selected)" : ""}`}
-                  onClick={() => setO({ ...o, template: t.id })}
+                  disabled={locked}
+                  accessibilityLabel={`${t.name} template${selected ? " (selected)" : ""}${locked ? ` — on the ${needs} plan` : ""}`}
+                  onClick={() => {
+                    if (!locked) setO({ ...o, template: t.id });
+                  }}
                 >
-                  <s-stack direction="block" gap="small-200">
-                    <s-stack
-                      direction="inline"
-                      gap="small-200"
-                      alignItems="center"
-                    >
-                      <s-text type="strong">{t.name}</s-text>
-                      {selected && <s-badge tone="success">Selected</s-badge>}
+                  <div style={{ opacity: locked ? 0.55 : 1 }}>
+                    <s-stack direction="block" gap="small-200">
+                      <s-stack
+                        direction="inline"
+                        gap="small-200"
+                        alignItems="center"
+                      >
+                        <s-text type="strong">{t.name}</s-text>
+                        {selected && <s-badge tone="success">Selected</s-badge>}
+                        {locked && <s-badge>{needs} plan</s-badge>}
+                      </s-stack>
+                      <s-text color="subdued">{t.description}</s-text>
                     </s-stack>
-                    <s-text color="subdued">{t.description}</s-text>
-                  </s-stack>
+                  </div>
                 </s-clickable>
               );
             })}
           </div>
+          <s-paragraph>
+            Your {plan.name} plan includes {plan.templates.length} of{" "}
+            {SLIP_TEMPLATES.length} templates.
+            {plan.templates.length < SLIP_TEMPLATES.length && (
+              <>
+                {" "}
+                <s-link href="/app/plans">Upgrade for more</s-link>.
+              </>
+            )}
+          </s-paragraph>
+        </s-section>
+
+        <s-section heading="Custom template">
+          {plan.customTemplateRequest ? (
+            <s-stack direction="block" gap="base">
+              <s-paragraph>
+                Need a layout none of these templates fit — a branded gift
+                slip, a returns form, a label for your courier? Describe it
+                and we&apos;ll build it for your store and reply by email.
+              </s-paragraph>
+              <s-text-area
+                label="What should the template look like?"
+                rows={4}
+                maxLength={TEMPLATE_REQUEST_LIMITS.descriptionMax}
+                value={req.description}
+                onInput={(e) => setReq({ ...req, description: e.currentTarget.value })}
+              />
+              <s-text-field
+                label="Reference link (optional)"
+                details="A sample PDF or image, e.g. a Shopify Files or Google Drive link."
+                placeholder="https://…"
+                value={req.referenceUrl}
+                onInput={(e) => setReq({ ...req, referenceUrl: e.currentTarget.value })}
+              />
+              <s-email-field
+                label="Reply to"
+                value={req.contactEmail}
+                onInput={(e) => setReq({ ...req, contactEmail: e.currentTarget.value })}
+              />
+              {requestFetcher.data && !requestFetcher.data.ok && (
+                <s-banner tone="critical">{requestFetcher.data.error}</s-banner>
+              )}
+              <div>
+                <s-button
+                  onClick={() =>
+                    requestFetcher.submit(
+                      { intent: "template-request", ...req },
+                      { method: "POST", encType: "application/json" },
+                    )
+                  }
+                  disabled={req.description.trim().length < TEMPLATE_REQUEST_LIMITS.descriptionMin}
+                  {...(requestFetcher.state !== "idle" ? { loading: true } : {})}
+                >
+                  Send request
+                </s-button>
+              </div>
+              {loaded.requests.length > 0 && (
+                <s-stack direction="block" gap="small-200">
+                  <s-text type="strong">Your requests</s-text>
+                  {loaded.requests.map((r) => (
+                    <s-stack key={r.id} direction="inline" gap="small-200" alignItems="center">
+                      <s-badge tone={r.status === "DONE" ? "success" : r.status === "DECLINED" ? "critical" : "info"}>
+                        {TEMPLATE_REQUEST_STATUS_LABEL[r.status] ?? r.status}
+                      </s-badge>
+                      <s-text color="subdued">
+                        {new Date(r.createdAt).toLocaleDateString()} —{" "}
+                        {r.description.length > 80 ? `${r.description.slice(0, 79)}…` : r.description}
+                      </s-text>
+                    </s-stack>
+                  ))}
+                </s-stack>
+              )}
+            </s-stack>
+          ) : (
+            <s-paragraph>
+              Want a template built around your brand? On the{" "}
+              {loaded.upsell.customTemplateRequest} plan we design one for
+              you. <s-link href="/app/plans">See plans</s-link>
+            </s-paragraph>
+          )}
         </s-section>
 
         {/* Settings on the left, live preview on the right (sticky). */}
@@ -225,6 +377,28 @@ export default function PackingSlip() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <s-section heading="Language">
+              <s-select
+                label="Slip language"
+                value={plan.languages ? d.language : "en"}
+                disabled={!plan.languages}
+                details={
+                  plan.languages
+                    ? "Headings, dates, weather and the thank-you line print in this language. Your own texts (title, messages, footer) print as you type them."
+                    : `Print slips in French, German, Spanish, Italian, Portuguese or Dutch on the ${loaded.upsell.languages} plans.`
+                }
+                onChange={(e) =>
+                  setD({ language: e.currentTarget.value as SlipLanguage })
+                }
+              >
+                {SLIP_LANGUAGES.map((l) => (
+                  <s-option key={l.id} value={l.id}>
+                    {l.label}
+                  </s-option>
+                ))}
+              </s-select>
+            </s-section>
+
             <s-section heading="Logo & header">
               <s-stack direction="block" gap="base">
                 <s-select
@@ -387,6 +561,20 @@ export default function PackingSlip() {
                 />
                 {flag("showOrderDate", "Order date")}
                 {flag("showShippingMethod", "Shipping method")}
+                <s-select
+                  label="Scannable order number"
+                  details="For warehouses: scan the slip to find the order."
+                  value={d.orderCode}
+                  onChange={(e) =>
+                    setD({
+                      orderCode: e.currentTarget.value as SlipDesign["orderCode"],
+                    })
+                  }
+                >
+                  <s-option value="none">None</s-option>
+                  <s-option value="qr">QR code</s-option>
+                  <s-option value="barcode">Barcode (Code 128)</s-option>
+                </s-select>
               </s-stack>
             </s-section>
 
@@ -550,16 +738,48 @@ export default function PackingSlip() {
                 {flag("showRain", "Chance of rain", !d.showWeather)}
                 {flag("showAsOf", "“Forecast as of” time", !d.showWeather)}
                 {flag("showDates", "Dispatch and delivery dates")}
+                <s-select
+                  label="Forecast days"
+                  value={d.forecastRange}
+                  disabled={!d.showWeather}
+                  onChange={(e) =>
+                    setD({
+                      forecastRange:
+                        e.currentTarget.value === "trip" ? "trip" : "all",
+                    })
+                  }
+                >
+                  <s-option value="all">Today to the end of the forecast</s-option>
+                  <s-option value="trip">Dispatch to delivery only</s-option>
+                </s-select>
+                {flag(
+                  "showTip",
+                  "Weather tip when delivery day brings rain, frost or heat",
+                  !d.showWeather,
+                )}
+                <s-paragraph>
+                  Dispatch and delivery days with a 60%+ chance of rain,
+                  freezing temperatures or 35 °C+ get a warning badge.
+                </s-paragraph>
               </s-stack>
             </s-section>
 
             <s-section heading="Distance">
               <s-stack direction="block" gap="base">
-                {flag("showDistance", "Distance from the fulfillment location to the customer")}
+                {flag(
+                  "showDistance",
+                  "Distance from the fulfillment location to the customer",
+                  !plan.distance,
+                )}
+                {!plan.distance && (
+                  <s-text color="subdued">
+                    On the {loaded.upsell.distance} plans.
+                  </s-text>
+                )}
                 <s-select
                   label="Unit"
                   value={d.distanceUnit}
-                  disabled={!d.showDistance}
+                  disabled={!d.showDistance || !plan.distance}
                   onChange={(e) =>
                     setD({ distanceUnit: e.currentTarget.value as DistanceUnit })
                   }
@@ -573,7 +793,7 @@ export default function PackingSlip() {
                 <s-select
                   label="Measure from"
                   value={d.distanceFrom}
-                  disabled={!d.showDistance}
+                  disabled={!d.showDistance || !plan.distance}
                   details={
                     loaded.locations
                       ? "Each order's own location follows Shopify: change an order's fulfillment location and the next print updates."
@@ -622,6 +842,17 @@ export default function PackingSlip() {
                     setD({ footerExtra: e.currentTarget.value || null })
                   }
                 />
+                {flag(
+                  "showBranding",
+                  "“Weather Slip” mark at the foot of each printed page",
+                  !plan.removeBranding,
+                )}
+                {!plan.removeBranding && (
+                  <s-text color="subdued">
+                    Removing the mark is part of the{" "}
+                    {loaded.upsell.removeBranding} plan.
+                  </s-text>
+                )}
               </s-stack>
             </s-section>
 

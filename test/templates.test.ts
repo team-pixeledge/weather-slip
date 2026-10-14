@@ -61,7 +61,12 @@ describe("plans", () => {
     const business = planFeatures("BUSINESS");
     expect(free.length).toBe(business.length);
     expect(free.find((f) => f.text.includes("Dispatch-day"))!.included).toBe(false);
-    expect(pro.every((f) => f.included)).toBe(true);
+    // Every step up adds something; only Business has everything.
+    const count = (id: "FREE" | "STARTER" | "PRO" | "BUSINESS") => planFeatures(id).filter((f) => f.included).length;
+    expect(count("FREE")).toBeLessThan(count("STARTER"));
+    expect(count("STARTER")).toBeLessThan(count("PRO"));
+    expect(count("PRO")).toBeLessThan(count("BUSINESS"));
+    expect(pro.some((f) => !f.included)).toBe(true);
     expect(business.every((f) => f.included)).toBe(true);
     // Free stores do get weather on Shopify's own packing slip.
     expect(free.find((f) => f.text.includes("Shopify's own packing slip"))!.included).toBe(true);

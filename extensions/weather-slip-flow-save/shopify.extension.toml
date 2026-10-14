@@ -1,0 +1,19 @@
+# Shopify Flow action: "Save weather on order". Merchants on Pro/Business
+# add it after an "Order paid" or "Order fulfilled" trigger; the app then
+# saves that order's forecast (and counts it) without anyone printing.
+# Handled by app/routes/flow.save-weather.tsx (relative runtime_url = the
+# app URL). The plan check happens there — Flow shows the 4xx message.
+api_version = "2026-07"
+
+[[extensions]]
+name = "Save weather on order"
+type = "flow_action"
+handle = "weather-slip-save-weather"
+description = "Save the destination weather forecast on the order (Weather Slip Pro and Business). Shopify's packing slip then shows it, and the slip prints instantly. Each order counts once toward your plan."
+runtime_url = "/flow/save-weather"
+
+[settings]
+
+  [[settings.fields]]
+  type = "order_reference"
+  required = true

@@ -108,9 +108,35 @@ model Shop {
 
   updatedAt DateTime @updatedAt
 
-  snapshots OrderWeatherSnapshot[]
-  jobs      WeatherJob[]
-  counted   CountedOrder[]
+  snapshots        OrderWeatherSnapshot[]
+  jobs             WeatherJob[]
+  counted          CountedOrder[]
+  templateRequests TemplateRequest[]
+}
+
+enum TemplateRequestStatus {
+  RECEIVED
+  IN_PROGRESS
+  DONE
+  DECLINED
+}
+
+// "Build me a template" requests (Business plan). The operator is emailed
+// on each one and moves status by hand. contactEmail is the merchant's own
+// address (not customer data); the row goes with the shop on shop/redact.
+model TemplateRequest {
+  id           String                @id @default(cuid())
+  shop         String
+  description  String
+  referenceUrl String?
+  contactEmail String
+  status       TemplateRequestStatus @default(RECEIVED)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([shop, createdAt])
 }
 
 // Plans count orders, not API calls: one row per order the first time a

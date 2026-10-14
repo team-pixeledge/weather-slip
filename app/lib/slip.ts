@@ -6,6 +6,8 @@ import { addDays, shortDay, type IsoDate } from "./dates";
 import { cToF, type Unit } from "./format";
 import { weatherIcon } from "./weather-icons";
 import { DISTANCE_UNITS, formatDistance, type DistanceUnit, type SlipDistance } from "./distance";
+import { orderCodeSvg, type OrderCodeKind } from "./order-code";
+import { conditionLabel, isSlipLanguage, slipLocale, slipStrings, type SlipLanguage, type SlipStrings } from "./slip-i18n";
 import type { PrintAddress, PrintOrder, PrintShop } from "./orders.server";
 import type { ForecastPayload } from "./weather/types";
 
@@ -136,9 +138,9 @@ function temp(c: number, unit: Unit): string {
   return `${rc}°C / ${cToF(c)}°F`;
 }
 
-function longDate(iso: string, timeZone: string): string {
+function longDate(iso: string, timeZone: string, locale = "en-GB"): string {
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(locale, {
       timeZone,
       day: "numeric",
       month: "long",
@@ -150,8 +152,8 @@ function longDate(iso: string, timeZone: string): string {
 }
 
 /** "Thursday, 17 October 2026" for a calendar date. */
-function longDay(date: IsoDate): string {
-  return new Intl.DateTimeFormat("en-GB", {
+function longDay(date: IsoDate, locale = "en-GB"): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "UTC",
     weekday: "long",
     day: "numeric",
@@ -336,6 +338,16 @@ export interface SlipDesign {
   font: FontKey;
   fontSize: FontSizeKey;
   labelSize: LabelSize;
+  /** Printed wording (Pro and Business — planSlipOptions clamps it). */
+  language: SlipLanguage;
+  /** "Weather Slip" mark at the foot of each page (only Business may hide it). */
+  showBranding: boolean;
+  /** "all" = today → horizon; "trip" = dispatch day → delivery day only. */
+  forecastRange: "all" | "trip";
+  /** One line of advice when delivery day brings rain, frost or heat. */
+  showTip: boolean;
+  /** Scannable order number in the header, for warehouses. */
+  orderCode: OrderCodeKind;
 }
 
 export const DEFAULT_SLIP_DESIGN: SlipDesign = {
@@ -383,6 +395,11 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   font: "system",
   fontSize: "M",
   labelSize: "4x6",
+  language: "en",
+  showBranding: true,
+  forecastRange: "all",
+  showTip: true,
+  orderCode: "none",
 };
 
 export const TEXT_MAX = {
@@ -503,6 +520,11 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
       FONT_SIZES.map((f) => f.id),
     ),
     labelSize: pick("labelSize", ["4x6", "4x4"] as const),
+    language: isSlipLanguage(r.language) ? r.language : d.language,
+    showBranding: bool("showBranding"),
+    forecastRange: pick("forecastRange", ["all", "trip"] as const),
+    showTip: bool("showTip"),
+    orderCode: pick("orderCode", ["none", "qr", "barcode"] as const),
   };
 }
 
@@ -553,11 +575,12 @@ export const isSlipTemplate = (v: unknown): v is SlipTemplate =>
 export const FOOTER_MAX = 300;
 
 function addressHtml(
+  t: SlipStrings,
   a: PrintAddress | null,
   phoneFallback?: string | null,
   showPhone = true,
 ): string {
-  if (!a) return `<p class="muted">No address</p>`;
+  if (!a) return `<p class="muted">${escapeHtml(t.noAddress)}</p>`;
   const lines = [
     a.name,
     a.company,
@@ -567,7 +590,7 @@ function addressHtml(
     a.country,
   ].filter((l): l is string => Boolean(l && l.trim()));
   const phone = a.phone || phoneFallback;
-  if (phone && showPhone) lines.push(`Phone: ${phone}`);
+  if (phone && showPhone) lines.push(`${t.phone}: ${phone}`);
   return lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("");
 }
 
@@ -578,8 +601,8 @@ function placeText(w: {
   return [w.city, w.countryCode].filter(Boolean).join(", ");
 }
 
-function asOfText(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
+function asOfText(iso: string, timeZone: string, locale = "en-GB"): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     day: "numeric",
     month: "short",
@@ -588,30 +611,84 @@ function asOfText(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
-function unavailableText(status: Exclude<SlipWeather["status"], "ok">): string {
-  return status === "limit_reached"
-    ? "Weather not included: this month's plan limit is reached."
-    : status === "no_location"
-      ? "Weather not available: no shipping destination."
-      : "Weather temporarily unavailable.";
+/** The slip's wording and date/number locale, from the design's language. */
+function lang(d: SlipDesign) {
+  return { t: slipStrings(d.language), loc: slipLocale(d.language), cond: (label: string) => conditionLabel(label, d.language) };
 }
 
-function forecastNotes(w: Extract<SlipWeather, { status: "ok" }>): string[] {
+function unavailableText(t: SlipStrings, status: Exclude<SlipWeather["status"], "ok">): string {
+  return status === "limit_reached" ? t.limitReached : status === "no_location" ? t.noLocation : t.unavailable;
+}
+
+function forecastNotes(t: SlipStrings, loc: string, w: Extract<SlipWeather, { status: "ok" }>): string[] {
   if (w.delivery > w.horizonEnd) {
-    return [
-      `Delivery day (${shortDay(w.delivery)}) is beyond the forecast range (to ${shortDay(w.horizonEnd)}).`,
-    ];
+    return [t.beyondRange(shortDay(w.delivery, loc), shortDay(w.horizonEnd, loc))];
   }
-  if (w.delivery < (w.days[0]?.date ?? w.delivery))
-    return ["Estimated delivery date has passed."];
+  if (w.delivery < (w.days[0]?.date ?? w.delivery)) return [t.deliveryPassed];
   return [];
 }
 
-const dayTags = (w: { dispatch: string; delivery: string }, date: string) =>
+// Bad weather on a dispatch or delivery day gets a coloured warning badge:
+// likely rain, a frost, or heat that can harm parcels left outside.
+export const BAD_WEATHER = { rainPct: 60, freezingC: 0, hotC: 35 } as const;
+export type WeatherWarning = "rain" | "freezing" | "hot";
+
+export function weatherWarnings(day: Pick<SlipDay, "minC" | "maxC" | "precipProb">): WeatherWarning[] {
+  const out: WeatherWarning[] = [];
+  if (day.precipProb != null && day.precipProb >= BAD_WEATHER.rainPct) out.push("rain");
+  if (day.minC <= BAD_WEATHER.freezingC) out.push("freezing");
+  if (day.maxC >= BAD_WEATHER.hotC) out.push("hot");
+  return out;
+}
+
+// Inline SVG (the print CSP allows no image hosts). Amber-to-red triangle
+// with a white "!", so it stands out even on a mono laser as a dark shape.
+const WARN_ICON = `<svg class="warn-ico" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5 23 21.5H1z" fill="#F97316" stroke="#B91C1C" stroke-width="1.6" stroke-linejoin="round"/><rect x="10.8" y="8.5" width="2.4" height="7" rx="1.2" fill="#fff"/><circle cx="12" cy="18.3" r="1.35" fill="#fff"/></svg>`;
+
+/** Warning badges for a key (dispatch/delivery) day; "" for any other day. */
+function warningsHtml(t: SlipStrings, warnings: WeatherWarning[]): string {
+  if (!warnings.length) return "";
+  const text: Record<WeatherWarning, string> = { rain: t.warnRain, freezing: t.warnFreezing, hot: t.warnHot };
+  return `<span class="warns">${warnings
+    .map((w) => `<span class="warn w-${w}">${WARN_ICON}${escapeHtml(text[w])}</span>`)
+    .join("")}</span>`;
+}
+
+const dayTags = (t: SlipStrings, w: { dispatch: string; delivery: string }, date: string) =>
   [
-    date === w.dispatch ? "Dispatch" : null,
-    date === w.delivery ? "Delivery" : null,
-  ].filter((t): t is string => t != null);
+    date === w.dispatch ? t.dispatch : null,
+    date === w.delivery ? t.delivery : null,
+  ].filter((x): x is string => x != null);
+
+/**
+ * The days to show. "trip" keeps dispatch → delivery; if none of those are
+ * in the forecast (dates passed or beyond the horizon) it shows them all
+ * rather than an empty strip.
+ */
+function shownDays(w: Extract<SlipWeather, { status: "ok" }>, d: SlipDesign): SlipDay[] {
+  if (d.forecastRange !== "trip") return w.days;
+  const trip = w.days.filter((x) => x.date >= w.dispatch && x.date <= w.delivery);
+  return trip.length ? trip : w.days;
+}
+
+/** "Rain expected on delivery day: …" — the worst of rain, frost, heat. */
+export function weatherTip(t: SlipStrings, w: SlipWeather | undefined): string | null {
+  if (!w || w.status !== "ok") return null;
+  const day = w.days.find((x) => x.date === w.delivery);
+  if (!day) return null;
+  const warns = weatherWarnings(day);
+  if (warns.includes("rain")) return t.tipRain;
+  if (warns.includes("freezing")) return t.tipFreezing;
+  if (warns.includes("hot")) return t.tipHot;
+  return null;
+}
+
+const tipHtml = (t: SlipStrings, w: SlipWeather | undefined, d: SlipDesign) => {
+  const tip = d.showTip ? weatherTip(t, w) : null;
+  return tip ? `<p class="tip">${WARN_ICON}<span>${escapeHtml(tip)}</span></p>` : "";
+};
+
+const DROP_ICON = `<svg class="drop" width="9" height="11" viewBox="0 0 9 11" aria-hidden="true" focusable="false"><path d="M4.5 0C3 2.4 0 5.2 0 7.2A4.5 3.8 0 0 0 9 7.2C9 5.2 6 2.4 4.5 0z" fill="#2F80ED"/></svg>`;
 
 /** Forecast as cards (Classic, Detailed). */
 function weatherCards(
@@ -621,30 +698,33 @@ function weatherCards(
   d: SlipDesign = DEFAULT_SLIP_DESIGN,
 ): string {
   if (!w || (!d.showWeather && !d.showDates)) return "";
+  const { t, loc, cond } = lang(d);
   const dates = d.showDates
     ? `
     <div class="dates">
-      <p><strong>Dispatch:</strong> ${escapeHtml(longDay(w.dispatch))}</p>
-      <p><strong>Estimated delivery:</strong> ${escapeHtml(longDay(w.delivery))}</p>
+      <p><strong>${escapeHtml(t.dispatch)}:</strong> ${escapeHtml(longDay(w.dispatch, loc))}</p>
+      <p><strong>${escapeHtml(t.estimatedDelivery)}:</strong> ${escapeHtml(longDay(w.delivery, loc))}</p>
     </div>`
     : "";
   if (!d.showWeather) return `<section class="weather">${dates}</section>`;
   if (w.status !== "ok") {
-    return `<section class="weather">${dates}<p class="muted">${escapeHtml(unavailableText(w.status))}</p></section>`;
+    return `<section class="weather">${dates}<p class="muted">${escapeHtml(unavailableText(t, w.status))}</p></section>`;
   }
-  const boxes = w.days
+  const boxes = shownDays(w, d)
     .map((day) => {
-      const tags = dayTags(w, day.date);
+      const tags = dayTags(t, w, day.date);
       const rain =
         d.showRain && day.precipProb != null && day.precipProb >= 20
-          ? `<div class="rain">${day.precipProb}% rain</div>`
+          ? `<div class="rain">${DROP_ICON} ${escapeHtml(t.rainPct(day.precipProb))}</div>`
           : "";
+      const warns = tags.length ? weatherWarnings(day) : [];
       return `
-        <div class="day${tags.length ? " key" : ""}">
-          <div class="d">${escapeHtml(shortDay(day.date))}</div>
+        <div class="day${tags.length ? " key" : ""}${warns.length ? " bad" : ""}">
+          <div class="d">${escapeHtml(shortDay(day.date, loc))}</div>
           ${tags.length ? `<div class="tag">${escapeHtml(tags.join(" · "))}</div>` : ""}
+          ${warningsHtml(t, warns)}
           <div class="icon">${weatherIcon(day.label, 34)}</div>
-          <div class="cond">${escapeHtml(day.label)}</div>
+          <div class="cond">${escapeHtml(cond(day.label))}</div>
           <div class="t">${escapeHtml(temp(day.maxC, unit))}</div>
           <div class="t lo">${escapeHtml(temp(day.minC, unit))}</div>
           ${rain}
@@ -654,13 +734,14 @@ function weatherCards(
   return `
     <section class="weather">
       ${dates}
-      <h3>Weather forecast — ${escapeHtml(placeText(w) || "destination")}</h3>
-      ${d.showNow && w.current ? `<p class="now">${weatherIcon(w.current.label, 18)} Now: ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(w.current.label)}</p>` : ""}
-      <div class="days">${boxes || `<p class="muted">No forecast days available.</p>`}</div>
-      ${forecastNotes(w)
+      <h3>${escapeHtml(t.weatherForecast)} — ${escapeHtml(placeText(w) || t.destination)}</h3>
+      ${d.showNow && w.current ? `<p class="now">${weatherIcon(w.current.label, 18)} ${escapeHtml(t.nowTitle)}: ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(cond(w.current.label))}</p>` : ""}
+      <div class="days">${boxes || `<p class="muted">${escapeHtml(t.noForecastDays)}</p>`}</div>
+      ${tipHtml(t, w, d)}
+      ${forecastNotes(t, loc, w)
         .map((n) => `<p class="muted">${escapeHtml(n)}</p>`)
         .join("")}
-      ${d.showAsOf ? `<p class="asof">Forecast as of ${escapeHtml(asOfText(w.asOf, timeZone))}</p>` : ""}
+      ${d.showAsOf ? `<p class="asof">${escapeHtml(t.forecastAsOf)} ${escapeHtml(asOfText(w.asOf, timeZone, loc))}</p>` : ""}
     </section>`;
 }
 
@@ -673,25 +754,27 @@ function weatherTable(
   d: SlipDesign = DEFAULT_SLIP_DESIGN,
 ): string {
   if (!w || (!d.showWeather && !d.showDates)) return "";
+  const { t, loc, cond } = lang(d);
   const dates = !d.showDates
     ? ""
     : compact
-      ? `<p class="dates"><strong>Dispatch</strong> ${escapeHtml(shortDay(w.dispatch))} · <strong>Delivery</strong> ${escapeHtml(shortDay(w.delivery))}</p>`
-      : `<p class="dates"><strong>Dispatch:</strong> ${escapeHtml(longDay(w.dispatch))} &nbsp; <strong>Estimated delivery:</strong> ${escapeHtml(longDay(w.delivery))}</p>`;
+      ? `<p class="dates"><strong>${escapeHtml(t.dispatch)}</strong> ${escapeHtml(shortDay(w.dispatch, loc))} · <strong>${escapeHtml(t.delivery)}</strong> ${escapeHtml(shortDay(w.delivery, loc))}</p>`
+      : `<p class="dates"><strong>${escapeHtml(t.dispatch)}:</strong> ${escapeHtml(longDay(w.dispatch, loc))} &nbsp; <strong>${escapeHtml(t.estimatedDelivery)}:</strong> ${escapeHtml(longDay(w.delivery, loc))}</p>`;
   if (!d.showWeather) return `<section class="weather">${dates}</section>`;
   if (w.status !== "ok") {
-    return `<section class="weather">${dates}<p class="muted">${escapeHtml(unavailableText(w.status))}</p></section>`;
+    return `<section class="weather">${dates}<p class="muted">${escapeHtml(unavailableText(t, w.status))}</p></section>`;
   }
-  const rows = w.days
+  const rows = shownDays(w, d)
     .map((day) => {
-      const tags = dayTags(w, day.date);
+      const tags = dayTags(t, w, day.date);
       const rain =
         day.precipProb != null && day.precipProb >= 20
-          ? `${day.precipProb}%`
+          ? `${DROP_ICON} ${day.precipProb}%`
           : "";
+      const warns = tags.length ? weatherWarnings(day) : [];
       return `<tr${tags.length ? ' class="key"' : ""}>
-        <td>${escapeHtml(shortDay(day.date))}${tags.length ? ` <span class="tag">${escapeHtml(tags.join("/"))}</span>` : ""}</td>
-        <td class="wxcell">${weatherIcon(day.label, compact ? 14 : 16)} ${escapeHtml(day.label)}</td>
+        <td>${escapeHtml(shortDay(day.date, loc))}${tags.length ? ` <span class="tag">${escapeHtml(tags.join("/"))}</span>` : ""}${warningsHtml(t, warns)}</td>
+        <td class="wxcell">${weatherIcon(day.label, compact ? 14 : 16)} ${escapeHtml(cond(day.label))}</td>
         <td class="num">${escapeHtml(temp(day.maxC, unit))}</td>
         <td class="num">${escapeHtml(temp(day.minC, unit))}</td>
         ${d.showRain ? `<td class="num">${rain}</td>` : ""}
@@ -701,15 +784,16 @@ function weatherTable(
   return `
     <section class="weather">
       ${dates}
-      <h3>Forecast — ${escapeHtml(placeText(w) || "destination")}${d.showNow && w.current ? ` <span class="muted">(now ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(w.current.label)})</span>` : ""}</h3>
+      <h3>${escapeHtml(t.forecast)} — ${escapeHtml(placeText(w) || t.destination)}${d.showNow && w.current ? ` <span class="muted">(${escapeHtml(t.nowLower)} ${escapeHtml(temp(w.current.tempC, unit))}, ${escapeHtml(cond(w.current.label))})</span>` : ""}</h3>
       <table class="fc">
-        <thead><tr><th>Day</th><th>Weather</th><th class="num">High</th><th class="num">Low</th>${d.showRain ? '<th class="num">Rain</th>' : ""}</tr></thead>
+        <thead><tr><th>${escapeHtml(t.day)}</th><th>${escapeHtml(t.weather)}</th><th class="num">${escapeHtml(t.high)}</th><th class="num">${escapeHtml(t.low)}</th>${d.showRain ? `<th class="num">${escapeHtml(t.rain)}</th>` : ""}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      ${forecastNotes(w)
+      ${tipHtml(t, w, d)}
+      ${forecastNotes(t, loc, w)
         .map((n) => `<p class="muted">${escapeHtml(n)}</p>`)
         .join("")}
-      ${d.showAsOf ? `<p class="asof">Forecast as of ${escapeHtml(asOfText(w.asOf, timeZone))}</p>` : ""}
+      ${d.showAsOf ? `<p class="asof">${escapeHtml(t.forecastAsOf)} ${escapeHtml(asOfText(w.asOf, timeZone, loc))}</p>` : ""}
     </section>`;
 }
 
@@ -748,14 +832,15 @@ function itemText(
   d: SlipDesign,
   showSku: boolean,
 ) {
+  const { t } = lang(d);
   const base = d.showVariant && li.title ? li.title : li.name;
   const details: string[] = [];
   if (d.showVariant && li.title && li.variantTitle)
     details.push(li.variantTitle);
-  if (d.showVendor && li.vendor) details.push(`Vendor: ${li.vendor}`);
-  if (li.sku && showSku) details.push(`SKU: ${li.sku}`);
+  if (d.showVendor && li.vendor) details.push(`${t.vendor}: ${li.vendor}`);
+  if (li.sku && showSku) details.push(`${t.sku}: ${li.sku}`);
   const barcode = li.variant?.barcodes?.nodes[0]?.value;
-  if (d.showBarcode && barcode) details.push(`Barcode: ${barcode}`);
+  if (d.showBarcode && barcode) details.push(`${t.barcode}: ${barcode}`);
   if (d.showProperties) {
     for (const a of visibleAttrs(li.customAttributes))
       details.push(`${a.key}: ${a.value}`);
@@ -763,8 +848,8 @@ function itemText(
   return { title: truncate(base, d.titleMax), details };
 }
 
-function moneyFmt(currency: string | undefined) {
-  const f = new Intl.NumberFormat("en-US", {
+function moneyFmt(currency: string | undefined, locale = "en-US") {
+  const f = new Intl.NumberFormat(locale, {
     style: "currency",
     currency: currency || "USD",
   });
@@ -776,13 +861,18 @@ const ITEM_IMG_PX: Record<SizeKey, number> = { S: 36, M: 48, L: 72 };
 
 function itemsHtml(order: PrintOrder, o: SlipOptions, prices: boolean): string {
   const d = o.design;
-  const money = moneyFmt(order.currencyCode);
-  const images = o.showImages && o.template !== "MINIMAL";
-  const rows = itemsToShip(order, d)
+  const { t, loc } = lang(d);
+  // English keeps the US money format it always printed with.
+  const money = moneyFmt(order.currencyCode, d.language === "en" ? "en-US" : loc);
+  const lines = itemsToShip(order, d);
+  // No image anywhere → no image column at all; a missing one leaves its
+  // cell blank (no "No image" placeholder).
+  const images = o.showImages && o.template !== "MINIMAL" && lines.some(({ li }) => li.image);
+  const rows = lines
     .map(({ li, qty }) => {
       const img = li.image
         ? `<img src="${escapeHtml(li.image.url)}" alt="${escapeHtml(li.image.altText ?? "")}">`
-        : `<span class="noimg">No image</span>`;
+        : "";
       const { title, details } = itemText(li, d, o.showSku);
       const original = Number(li.originalUnitPriceSet?.shopMoney.amount ?? NaN);
       const now = Number(
@@ -807,14 +897,14 @@ function itemsHtml(order: PrintOrder, o: SlipOptions, prices: boolean): string {
             ${details.map((t) => `<div class="muted">${escapeHtml(t)}</div>`).join("")}
           </td>
           ${prices ? `<td class="num">${priceCell}</td>` : ""}
-          <td class="qty">${d.qtyFormat === "of" ? `${qty} of ${li.quantity}` : qty}</td>
+          <td class="qty">${d.qtyFormat === "of" ? escapeHtml(t.qtyOf(qty, li.quantity)) : qty}</td>
           ${prices ? `<td class="num">${Number.isFinite(now) ? escapeHtml(money(now * qty)) : ""}</td>` : ""}
         </tr>`;
     })
     .join("");
   return `
     <table class="items">
-      <thead><tr>${images ? "<th></th>" : ""}<th>Item</th>${prices ? '<th class="num">Price</th>' : ""}<th class="qty">Quantity</th>${prices ? '<th class="num">Total</th>' : ""}</tr></thead>
+      <thead><tr>${images ? "<th></th>" : ""}<th>${escapeHtml(t.item)}</th>${prices ? `<th class="num">${escapeHtml(t.price)}</th>` : ""}<th class="qty">${escapeHtml(t.quantity)}</th>${prices ? `<th class="num">${escapeHtml(t.total)}</th>` : ""}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
@@ -825,7 +915,7 @@ function cartAttributesHtml(order: PrintOrder, d: SlipDesign): string {
     ? visibleAttrs(order.customAttributes)
     : [];
   if (!attrs.length) return "";
-  return `<div class="note"><h3>Additional details</h3>${attrs
+  return `<div class="note"><h3>${escapeHtml(lang(d).t.additionalDetails)}</h3>${attrs
     .map(
       (a) =>
         `<p><strong>${escapeHtml(a.key)}:</strong> ${escapeHtml(a.value)}</p>`,
@@ -833,18 +923,19 @@ function cartAttributesHtml(order: PrintOrder, d: SlipDesign): string {
     .join("")}</div>`;
 }
 
-function totalsHtml(order: PrintOrder): string {
-  const money = moneyFmt(order.currencyCode);
+function totalsHtml(order: PrintOrder, d: SlipDesign): string {
+  const { t, loc } = lang(d);
+  const money = moneyFmt(order.currencyCode, d.language === "en" ? "en-US" : loc);
   const amt = (m?: { shopMoney: { amount: string } }) => m?.shopMoney.amount;
   const discount = Number(amt(order.currentTotalDiscountsSet) ?? 0);
   const lines: [string, string | undefined, boolean?][] = [
-    ["Subtotal", amt(order.currentSubtotalPriceSet)],
+    [t.subtotal, amt(order.currentSubtotalPriceSet)],
     ...(discount > 0
-      ? ([["Discounts", `-${discount}`]] as [string, string][])
+      ? ([[t.discounts, `-${discount}`]] as [string, string][])
       : []),
-    ["Shipping", amt(order.totalShippingPriceSet)],
-    ["Tax", amt(order.currentTotalTaxSet)],
-    ["Total", amt(order.currentTotalPriceSet), true],
+    [t.shipping, amt(order.totalShippingPriceSet)],
+    [t.tax, amt(order.currentTotalTaxSet)],
+    [t.total, amt(order.currentTotalPriceSet), true],
   ];
   return `
     <table class="totals">
@@ -852,7 +943,7 @@ function totalsHtml(order: PrintOrder): string {
         .filter(([, v]) => v != null)
         .map(
           ([k, v, strong]) =>
-            `<tr${strong ? ' class="grand"' : ""}><td>${k}</td><td class="num">${escapeHtml(money(v))}</td></tr>`,
+            `<tr${strong ? ' class="grand"' : ""}><td>${escapeHtml(k)}</td><td class="num">${escapeHtml(money(v))}</td></tr>`,
         )
         .join("")}
     </table>`;
@@ -860,7 +951,7 @@ function totalsHtml(order: PrintOrder): string {
 
 function thanks(o: SlipOptions): string {
   const msg =
-    o.footer == null ? "Thank you for shopping with us!" : o.footer.trim();
+    o.footer == null ? lang(o.design).t.thanks : o.footer.trim();
   return msg ? `<p class="thanks">${escapeHtml(msg)}</p>` : "";
 }
 
@@ -907,29 +998,19 @@ function logoHtml(d: SlipDesign): string {
 const headerNote = (d: SlipDesign) =>
   d.headerNote ? `<div class="headnote">${escapeHtml(d.headerNote)}</div>` : "";
 
-const PAYMENT_LABEL: Record<string, string> = {
-  PAID: "Paid",
-  PENDING: "Payment pending",
-  AUTHORIZED: "Authorized",
-  PARTIALLY_PAID: "Partially paid",
-  PARTIALLY_REFUNDED: "Partially refunded",
-  REFUNDED: "Refunded",
-  VOIDED: "Voided",
-  EXPIRED: "Expired",
-};
-
 /** Email / payment lines under the addresses, when switched on. */
 function contactHtml(order: PrintOrder, d: SlipDesign): string {
+  const { t } = lang(d);
   const bits: string[] = [];
   if (d.showEmail && order.email)
     bits.push(
-      `<span><strong>Email:</strong> ${escapeHtml(order.email)}</span>`,
+      `<span><strong>${escapeHtml(t.email)}:</strong> ${escapeHtml(order.email)}</span>`,
     );
   if (d.showPaymentStatus && order.displayFinancialStatus) {
     const p =
-      PAYMENT_LABEL[order.displayFinancialStatus] ??
+      t.paymentStatus[order.displayFinancialStatus] ??
       order.displayFinancialStatus;
-    bits.push(`<span><strong>Payment:</strong> ${escapeHtml(p)}</span>`);
+    bits.push(`<span><strong>${escapeHtml(t.payment)}:</strong> ${escapeHtml(p)}</span>`);
   }
   return bits.length ? `<div class="contact">${bits.join("")}</div>` : "";
 }
@@ -940,19 +1021,20 @@ function itemCount(order: PrintOrder, d: SlipDesign): number {
 
 const noteHtml = (order: PrintOrder, o: SlipOptions) =>
   o.showNote && order.note?.trim()
-    ? `<div class="note"><h3>Order note</h3><p>${escapeHtml(order.note)}</p></div>`
+    ? `<div class="note"><h3>${escapeHtml(lang(o.design).t.orderNote)}</h3><p>${escapeHtml(order.note)}</p></div>`
     : "";
 
 /** "Distance: 1,234 km from Austin, US" (one per shipping location). */
 function distanceHtml(list: SlipDistance[] | undefined, d: SlipDesign): string {
   if (!d.showDistance || !list?.length) return "";
+  const { t, loc } = lang(d);
   const ok = list.filter((x): x is Extract<SlipDistance, { status: "ok" }> => x.status === "ok");
   const body = ok.length
     ? ok
-        .map((x) => `${escapeHtml(formatDistance(x.km, d.distanceUnit))}${x.from ? ` from ${escapeHtml(x.from)}` : ""}`)
+        .map((x) => `${escapeHtml(formatDistance(x.km, d.distanceUnit, d.language === "en" ? "en-US" : loc))}${x.from ? ` ${escapeHtml(t.from)} ${escapeHtml(x.from)}` : ""}`)
         .join(" · ")
-    : `<span class="muted">not available</span>`;
-  return `<p class="distance"><strong>Distance:</strong> ${body}${ok.length ? ` <span class="muted">(straight line)</span>` : ""}</p>`;
+    : `<span class="muted">${escapeHtml(t.notAvailable)}</span>`;
+  return `<p class="distance"><strong>${escapeHtml(t.distance)}:</strong> ${body}${ok.length ? ` <span class="muted">(${escapeHtml(t.straightLine)})</span>` : ""}</p>`;
 }
 
 interface PageCtx {
@@ -968,6 +1050,7 @@ interface PageCtx {
 function fullPage(order: PrintOrder, c: PageCtx): string {
   const { o } = c;
   const d = o.design;
+  const { t, loc } = lang(d);
   const prices = o.template === "DETAILED" || d.showPrices;
   const totals = o.template === "DETAILED" || d.showTotals;
   const weather =
@@ -976,14 +1059,15 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
       : weatherCards(c.weather, c.unit, c.timeZone, d);
   const title = escapeHtml(
     d.title ??
-      (o.template === "DETAILED" ? "Packing slip & receipt" : "Packing slip"),
+      (o.template === "DETAILED" ? t.packingSlipReceipt : t.packingSlip),
   );
   const logo = logoHtml(d);
   const meta = `
         <div class="meta">
           ${d.logoPosition === "right" ? logo : ""}
-          <p><strong>Order ${escapeHtml(order.name)}</strong></p>
-          ${d.showOrderDate ? `<p>${escapeHtml(longDate(order.createdAt, c.timeZone))}</p>` : ""}
+          ${d.orderCode !== "none" ? `<div class="ocode-wrap">${orderCodeSvg(d.orderCode, order.name)}</div>` : ""}
+          <p><strong>${escapeHtml(t.order)} ${escapeHtml(order.name)}</strong></p>
+          ${d.showOrderDate ? `<p>${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}</p>` : ""}
           ${d.showShippingMethod && order.shippingLine ? `<p>${escapeHtml(order.shippingLine.title)}</p>` : ""}
         </div>`;
   const header =
@@ -997,16 +1081,16 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
       ${header}
       ${headerNote(d)}
       <div class="addresses">
-        <div><h3>Ship to</h3>${addressHtml(order.shippingAddress, order.phone, d.showPhone)}</div>
-        ${o.showBilling ? `<div><h3>Bill to</h3>${addressHtml(order.billingAddress, null, d.showPhone)}</div>` : ""}
+        <div><h3>${escapeHtml(t.shipTo)}</h3>${addressHtml(t, order.shippingAddress, order.phone, d.showPhone)}</div>
+        ${o.showBilling ? `<div><h3>${escapeHtml(t.billTo)}</h3>${addressHtml(t, order.billingAddress, null, d.showPhone)}</div>` : ""}
       </div>
       ${contactHtml(order, d)}
       ${distanceHtml(c.distance, d)}
       ${weather ? `<hr>${weather}` : ""}
       <hr>
-      <h3>Order details${d.showItemCount ? ` · ${itemCount(order, d)} ${itemCount(order, d) === 1 ? "item" : "items"}` : ""}</h3>
+      <h3>${escapeHtml(t.orderDetails)}${d.showItemCount ? ` · ${itemCount(order, d)} ${escapeHtml(t.items(itemCount(order, d)))}` : ""}</h3>
       ${itemsHtml(order, o, prices)}
-      ${totals ? totalsHtml(order) : ""}
+      ${totals ? totalsHtml(order, d) : ""}
       ${noteHtml(order, o)}
       ${cartAttributesHtml(order, d)}
       ${shopFooter(c.shop, o)}
@@ -1022,24 +1106,25 @@ function labelPage(order: PrintOrder, c: PageCtx): string {
     })
     .join("");
   const d = c.o.design;
+  const { t, loc } = lang(d);
   // Label logo size comes from designVars (half the chosen height).
   const logo = logoHtml(d);
   return `
     <article class="page">
       <header>
         <span class="brand">${logo}${d.showStoreName ? `<strong>${escapeHtml(c.shop.name)}</strong>` : ""}</span>
-        <span><strong>${escapeHtml(order.name)}</strong>${d.showOrderDate ? ` · ${escapeHtml(longDate(order.createdAt, c.timeZone))}` : ""}</span>
+        <span>${d.orderCode !== "none" ? `<span class="ocode-wrap">${orderCodeSvg(d.orderCode, order.name)}</span>` : ""}<strong>${escapeHtml(order.name)}</strong>${d.showOrderDate ? ` · ${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}` : ""}</span>
       </header>
       ${headerNote(d)}
       <div class="shipto">
-        <h3>Ship to</h3>
-        ${addressHtml(order.shippingAddress, order.phone, d.showPhone)}
+        <h3>${escapeHtml(t.shipTo)}</h3>
+        ${addressHtml(t, order.shippingAddress, order.phone, d.showPhone)}
         ${d.showShippingMethod && order.shippingLine ? `<p class="muted">${escapeHtml(order.shippingLine.title)}</p>` : ""}
       </div>
       ${contactHtml(order, d)}
       ${distanceHtml(c.distance, d)}
       ${weatherTable(c.weather, c.unit, c.timeZone, true, d)}
-      <h3>Items${d.showItemCount ? ` (${itemCount(order, d)})` : ""}</h3>
+      <h3>${escapeHtml(t.itemsHeading)}${d.showItemCount ? ` (${itemCount(order, d)})` : ""}</h3>
       <ul class="lines">${items}</ul>
       ${noteHtml(order, c.o)}
       ${cartAttributesHtml(order, d)}
@@ -1080,12 +1165,30 @@ const BASE_STYLES = `
   .day .d { font-weight: 600; }
   .day .tag, .fc .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--accent, #111); }
   .day .icon { margin: 4px 0 0; line-height: 0; }
+  .day.bad { background: #FFF7ED; border-color: #EA580C; }
+  .warns { display: inline-flex; flex-wrap: wrap; gap: 3px; margin: 2px 0; }
+  .fc .warns { margin: 0 0 0 4px; vertical-align: middle; }
+  .warn { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px 1px 3px; border-radius: 9px;
+          font-size: 9.5px; font-weight: 700; line-height: 1.5; white-space: nowrap; border: 1px solid; }
+  .warn svg.warn-ico { flex: none; }
+  .warn.w-rain { background: #DBEAFE; color: #1E40AF; border-color: #3B82F6; }
+  .warn.w-freezing { background: #CFFAFE; color: #155E75; border-color: #06B6D4; }
+  .warn.w-hot { background: #FEE2E2; color: #991B1B; border-color: #EF4444; }
+  /* Browsers drop backgrounds when printing unless told otherwise. */
+  .day.bad, .warn { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .day .cond { color: #444; margin: 2px 0; }
   svg.wx { display: inline-block; vertical-align: middle; }
   .now svg.wx { margin: -3px 2px 0 0; }
   td.wxcell { white-space: nowrap; }
   td.wxcell svg.wx { margin: -2px 3px 0 0; }
   .day .lo, .day .rain { color: #555; font-size: 11px; }
+  svg.drop { display: inline-block; vertical-align: -1px; }
+  .tip { display: flex; align-items: center; gap: 6px; margin: 6px 0; padding: 5px 8px; border-left: 3px solid #EA580C;
+         background: #FFF7ED; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .tip svg { flex: none; }
+  .ocode-wrap { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+  svg.ocode.qr { width: 64px; height: 64px; }
+  svg.ocode.bc { width: 150px; height: 34px; }
   table.fc { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
   table.fc th { text-align: left; font-size: 10px; border-bottom: 1px solid #111; padding: 2px 4px; }
   table.fc td { border-bottom: 1px solid #ddd; padding: 3px 4px; }
@@ -1100,7 +1203,6 @@ const BASE_STYLES = `
   td.img img { object-fit: contain; display: block; width: var(--img, 48px); height: var(--img, 48px); }
   .iname { font-weight: 500; }
   s.was { color: #888; }
-  .noimg { display: inline-block; width: var(--img, 48px); font-size: 9px; color: #999; text-align: center; }
   table.items .qty { text-align: right; white-space: nowrap; }
   table.totals { margin: 8px 0 0 auto; border-collapse: collapse; min-width: 220px; }
   table.totals td { padding: 3px 6px; }
@@ -1124,11 +1226,18 @@ const BASE_STYLES = `
   }
 `;
 
+// Ink saver: hairlines and outlines only — no fills, no heavy borders.
 const MINIMAL_STYLES = `
   header h1 { font-size: 1.6em; }
-  .note { background: none; border: 1px solid #111; }
-  hr { margin: 8px 0; }
+  .note { background: none; border: 1px solid #bbb; }
+  hr { margin: 8px 0; border-top-color: #bbb; }
+  .headnote { background: none; border-left-width: 2px; }
   table.items td { border-bottom: 1px solid #ccc; padding: 4px 6px; }
+  table.fc th { border-bottom: 1px solid #999; }
+  table.fc tr.key td { border-bottom: 1px solid #999; }
+  table.fc tr.key td:first-child { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .warn { background: none !important; }
+  .tip { background: none; border-left-width: 2px; }
 `;
 
 const LABEL_STYLES = `
@@ -1147,6 +1256,10 @@ const LABEL_STYLES = `
   .note { margin-top: 6px; padding: 4px; background: none; border: 1px solid #111; }
   .thanks { margin-top: 6px; text-align: center; font-size: 9px; }
   .distance { margin: 4px 0; }
+  .tip { padding: 3px 5px; font-size: 9px; }
+  header .ocode-wrap { display: inline-flex; vertical-align: middle; margin: 0 6px 0 0; }
+  svg.ocode.qr { width: 48px; height: 48px; }
+  svg.ocode.bc { width: 120px; height: 28px; }
   @page { size: 4in 6in; margin: 0; }
   @media print { .page { padding: 0.15in; width: 4in; } }
 `;
@@ -1205,6 +1318,10 @@ interface DocOptions {
   autoPrint: boolean;
   /** false: no toolbar or script (in-app preview). */
   chrome: boolean;
+  /** The Weather Slip mark at the foot of each page. */
+  mark: boolean;
+  /** <html lang>, so the browser hyphenates and reads it right. */
+  lang: string;
 }
 
 /** Printed at the foot of every page (in place of the browser's URL line). */
@@ -1231,7 +1348,7 @@ function documentHtml(
 </script>`
     : "";
   return `<!doctype html>
-<html lang="en">
+<html lang="${d.lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1242,7 +1359,7 @@ function documentHtml(
 <body>
 ${d.chrome ? `<div class="bar"><span>${escapeHtml(title)}</span><button type="button" id="print">Print / Save as PDF</button></div>` : ""}
 ${body}
-${WS_MARK}
+${d.mark ? WS_MARK : ""}
 ${script}
 </body>
 </html>`;
@@ -1290,13 +1407,15 @@ export function renderPackingSlips(
     nonce: opts.nonce,
     autoPrint: opts.autoPrint ?? true,
     chrome: opts.chrome ?? true,
+    mark: o.design.showBranding,
+    lang: o.design.language,
   });
 }
 
 export function renderCustomerList(
   shop: PrintShop,
   orders: PrintOrder[],
-  opts: Omit<SlipRenderOptions, "unit" | "slip">,
+  opts: Omit<SlipRenderOptions, "unit" | "slip"> & { mark?: boolean },
 ): string {
   const rows = orders
     .map((o, i) => {
@@ -1340,6 +1459,8 @@ export function renderCustomerList(
       nonce: opts.nonce,
       autoPrint: opts.autoPrint ?? true,
       chrome: opts.chrome ?? true,
+      mark: opts.mark ?? true,
+      lang: "en",
     },
   );
 }
