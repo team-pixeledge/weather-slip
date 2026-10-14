@@ -87,6 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (ids.length) {
         await prisma.orderWeatherSnapshot.deleteMany({ where: { shop, orderId: { in: ids } } });
         await prisma.weatherJob.deleteMany({ where: { shop, orderId: { in: ids } } });
+        await prisma.printedOrder.deleteMany({ where: { shop, orderId: { in: ids } } });
         await deleteOrderMetafields(shop, ids);
       }
       break;

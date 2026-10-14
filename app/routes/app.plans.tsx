@@ -184,6 +184,10 @@ const FAQ: [string, string][] = [
     "Every slip you print with weather: each order on each print uses one from your monthly allowance — printing 20 slips uses 20, and reprinting an order uses one more. Printing the same order again within 10 minutes is free (a reload, Shopify's print preview, a second copy for the box). Orders you never print never count, and neither does the customer list; saving weather with Shopify Flow doesn't count either — the print does. The weather is saved on the order, so every reprint shows exactly the same forecast.",
   ],
   [
+    "How do I see which slips are already printed?",
+    "On the Orders page an order whose slip has been printed is faded, shows a green “Printed” badge with the date (and ×2, ×3… for repeat prints), and its button says Reprint. Printing the same order again within 10 minutes doesn't add to the count.",
+  ],
+  [
     "If I re-pack an order and print its slip again, is that charged?",
     "Yes, one print — unless it's within 10 minutes of the last print of that order. The reprint shows the same saved forecast; it doesn't fetch new weather.",
   ],

@@ -9,7 +9,7 @@ import { notifyAdmin } from "./alerts.server";
 import { drainQueue } from "./queue-runner.server";
 import { brandLogoIfFresh } from "./brand-logo.server";
 import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, resolveLogo } from "./slip";
-import { slipOptions } from "./shop.server";
+import { recordPrints, slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 import { distancesForSlips } from "./distance.server";
 import { PLANS, planSlipOptions, plansWith } from "./plans";
@@ -129,6 +129,7 @@ async function renderPrint(
       ? await distancesForSlips(shop, orders, admin, slip.design.distanceFrom)
       : undefined;
     html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip, distance });
+    await recordPrints(shop.shop, orders.map((o) => o.id.slice(o.id.lastIndexOf("/") + 1)));
   }
   return new Response(html, { headers: securityHeaders(nonce, opts.frameAncestors) });
 }

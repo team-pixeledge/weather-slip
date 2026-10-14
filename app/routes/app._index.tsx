@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { listOrders } from "../lib/orders.server";
 import {
@@ -95,6 +96,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pageSize: perPage,
   });
 
+  // Which of these orders have had their slip printed (dimmed + "Reprint").
+  const printed = rows.length
+    ? await prisma.printedOrder.findMany({
+        where: { shop: session.shop, orderId: { in: rows.map((r) => r.id) } },
+        select: { orderId: true, printCount: true, lastPrintedAt: true },
+      })
+    : [];
+  const printedBy = new Map(printed.map((p) => [p.orderId, p]));
+  const rowsWithPrints = rows.map((r) => {
+    const p = printedBy.get(r.id);
+    return { ...r, printed: p ? { count: p.printCount, last: p.lastPrintedAt.toISOString() } : null };
+  });
+
 
   return {
     view,
@@ -103,7 +117,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     perPage,
     loadedAt: new Date().toISOString(),
     usage,
-    rows,
+    rows: rowsWithPrints,
     pageInfo,
     printToken: signPrintToken(session.shop),
     // Without read_all_orders Shopify only returns the last 60 days.
@@ -118,6 +132,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     viewsPlans: plansWith((p) => p.orderViews.length > 1),
     customerListPlans: plansWith((p) => p.customerList),
   };
+};
+
+/** Faded cell content for orders whose slip was already printed. */
+const Dim = ({ on, children }: { on: boolean; children: React.ReactNode }) =>
+  on ? <span style={{ opacity: 0.5 }}>{children}</span> : <>{children}</>;
+
+const printedLabel = (p: { count: number; last: string }) => {
+  const when = new Date(p.last).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return p.count > 1 ? `Printed ×${p.count} · ${when}` : `Printed ${when}`;
 };
 
 export default function Orders() {
@@ -411,6 +434,7 @@ export default function Orders() {
             {rows.map((r) => {
               const pay = r.financialStatus ? PAYMENT[r.financialStatus] : null;
               const ful = FULFILLMENT[r.fulfillmentStatus];
+              const dim = r.printed != null;
               return (
                 <s-table-row key={r.id}>
                   <s-table-cell>
@@ -421,44 +445,62 @@ export default function Orders() {
                     />
                   </s-table-cell>
                   <s-table-cell>
-                    <s-link href={`shopify://admin/orders/${r.id}`}>{r.name}</s-link>
+                    <Dim on={dim}>
+                      <s-link href={`shopify://admin/orders/${r.id}`}>{r.name}</s-link>
+                    </Dim>
                   </s-table-cell>
-                  <s-table-cell>{orderDate(r.createdAt)}</s-table-cell>
-                  <s-table-cell>{r.customer ?? "No customer"}</s-table-cell>
-                  <s-table-cell>{r.channel ?? ""}</s-table-cell>
+                  <s-table-cell><Dim on={dim}>{orderDate(r.createdAt)}</Dim></s-table-cell>
+                  <s-table-cell><Dim on={dim}>{r.customer ?? "No customer"}</Dim></s-table-cell>
+                  <s-table-cell><Dim on={dim}>{r.channel ?? ""}</Dim></s-table-cell>
                   <s-table-cell>
-                    {new Intl.NumberFormat(undefined, {
-                      style: "currency",
-                      currency: r.currency,
-                    }).format(Number(r.total))}
-                  </s-table-cell>
-                  <s-table-cell>
-                    {r.financialStatus && (
-                      <s-badge tone={pay?.tone ?? "neutral"}>
-                        {pay?.label ?? humanise(r.financialStatus)}
-                      </s-badge>
-                    )}
+                    <Dim on={dim}>
+                      {new Intl.NumberFormat(undefined, {
+                        style: "currency",
+                        currency: r.currency,
+                      }).format(Number(r.total))}
+                    </Dim>
                   </s-table-cell>
                   <s-table-cell>
-                    <s-stack direction="inline" gap="small-200">
-                      {r.cancelled && <s-badge tone="critical">Cancelled</s-badge>}
-                      <s-badge tone={ful?.tone ?? "neutral"}>
-                        {ful?.label ?? humanise(r.fulfillmentStatus)}
-                      </s-badge>
+                    <Dim on={dim}>
+                      {r.financialStatus && (
+                        <s-badge tone={pay?.tone ?? "neutral"}>
+                          {pay?.label ?? humanise(r.financialStatus)}
+                        </s-badge>
+                      )}
+                    </Dim>
+                  </s-table-cell>
+                  <s-table-cell>
+                    <Dim on={dim}>
+                      <s-stack direction="inline" gap="small-200">
+                        {r.cancelled && <s-badge tone="critical">Cancelled</s-badge>}
+                        <s-badge tone={ful?.tone ?? "neutral"}>
+                          {ful?.label ?? humanise(r.fulfillmentStatus)}
+                        </s-badge>
+                      </s-stack>
+                    </Dim>
+                  </s-table-cell>
+                  <s-table-cell>
+                    <Dim on={dim}>
+                      {r.itemCount} {r.itemCount === 1 ? "item" : "items"}
+                    </Dim>
+                  </s-table-cell>
+                  <s-table-cell><Dim on={dim}>{r.shippingMethod ?? ""}</Dim></s-table-cell>
+                  <s-table-cell>
+                    {/* Printed before: the row is dimmed and the action says
+                        Reprint (same saved forecast; it still uses a print). */}
+                    <s-stack direction="block" gap="small-100">
+                      <s-button
+                        icon="print"
+                        variant={dim ? "tertiary" : "secondary"}
+                        onClick={() => openPrint("slips", [r.id])}
+                        accessibilityLabel={dim ? `Reprint packing slip for ${r.name}` : `Print packing slip for ${r.name}`}
+                      >
+                        {dim ? "Reprint" : "Print slip"}
+                      </s-button>
+                      {r.printed && <s-badge tone="success">{printedLabel(r.printed)}</s-badge>}
                     </s-stack>
                   </s-table-cell>
-                  <s-table-cell>
-                    {r.itemCount} {r.itemCount === 1 ? "item" : "items"}
-                  </s-table-cell>
-                  <s-table-cell>{r.shippingMethod ?? ""}</s-table-cell>
-                  <s-table-cell>
-                    {/* Always a print action; a reprint reuses the forecast
-                        saved on the order, so it costs nothing. */}
-                    <s-button icon="print" onClick={() => openPrint("slips", [r.id])}>
-                      Print slip
-                    </s-button>
-                  </s-table-cell>
-                  <s-table-cell>{r.tags.join(", ")}</s-table-cell>
+                  <s-table-cell><Dim on={dim}>{r.tags.join(", ")}</Dim></s-table-cell>
                 </s-table-row>
               );
             })}

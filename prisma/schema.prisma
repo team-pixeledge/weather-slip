@@ -112,6 +112,24 @@ model Shop {
   jobs             WeatherJob[]
   counted          CountedOrder[]
   templateRequests TemplateRequest[]
+  printedOrders    PrintedOrder[]
+}
+
+// Orders whose packing slip has been printed (any print, with or without
+// weather) — the Orders page dims them and offers "Reprint". Separate from
+// CountedOrder, which is about weather and plan usage. printCount only
+// grows when the last print was over 10 minutes ago (preview/reload/
+// double-click aren't new prints), same window as chargePrint.
+model PrintedOrder {
+  shop           String
+  orderId        String // numeric Shopify order ID
+  firstPrintedAt DateTime @default(now())
+  lastPrintedAt  DateTime @default(now())
+  printCount     Int      @default(1)
+
+  shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@id([shop, orderId])
 }
 
 enum TemplateRequestStatus {

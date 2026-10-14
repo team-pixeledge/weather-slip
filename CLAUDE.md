@@ -233,6 +233,17 @@ switch confirmed inline, "Compare all features" table.
   development stores (`shop.plan.partnerDevelopment`). A test subscription
   only unlocks a plan in those same conditions.
 
+## Printed orders (added 2026-10-14)
+
+`PrintedOrder (shop, orderId, firstPrintedAt, lastPrintedAt, printCount)`,
+written by `recordPrints` after every slip render (app tab and admin print
+action; not the customer list) — separate from `CountedOrder` (weather/
+usage), so an order printed without weather still shows as printed. Repeat
+within 10 min doesn't bump printCount. Orders page: printed rows are dimmed
+(`Dim`), green "Printed ×n · date" badge, button "Reprint". Migration
+`printed_orders` backfills from CountedOrder rows created before per-print
+charging (10:50:24 UTC) or with lastPrintedAt. customers/redact deletes them.
+
 ## Embedded reloads (fixed 2026-10-14)
 
 A page showing only "200" = a hard reload inside the iframe without
