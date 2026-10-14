@@ -477,7 +477,7 @@ export default function Plans() {
   const rank = (id: PlanId) => PLAN_ORDER.indexOf(id);
 
   return (
-    <s-page heading="Plans & pricing">
+    <s-page heading="Plans & pricing" inlineSize="large">
       {/* One flow container: s-page lays out mixed plain/Polaris children
           unevenly (the cards ran over the comparison box), so everything
           stacks here with explicit gaps. */}
