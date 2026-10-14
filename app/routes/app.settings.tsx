@@ -29,6 +29,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       transitDays: shop.transitDays,
       skipWeekends: shop.skipWeekends,
     },
+    // Shipping days confirmed at least once (Get started checklist).
+    daysConfirmed: shop.settingsSavedAt != null,
     plan: PLANS[shop.plan],
     flowPlans: plansWith((p) => p.flowAutomation),
   };
@@ -55,6 +57,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     handlingDays: clampDays(body.handlingDays),
     transitDays: clampDays(body.transitDays),
     skipWeekends: body.skipWeekends === true,
+    settingsSavedAt: new Date(),
   };
   await prisma.shop.update({ where: { shop: session.shop }, data });
   return { ok: true };
@@ -213,6 +216,17 @@ export default function Settings() {
           Once an order ships, its real fulfillment date and the carrier&apos;s
           estimated delivery date are used instead, when Shopify has them.
         </s-paragraph>
+        {/* Save is disabled until something changes, so a merchant happy
+            with the defaults needs a way to confirm them (ticks the Get
+            started step). Gone once Settings has been saved. */}
+        {!loaded.daysConfirmed && !dirty && (
+          <s-button
+            onClick={save}
+            {...(fetcher.state !== "idle" ? { loading: true } : {})}
+          >
+            These shipping days are right
+          </s-button>
+        )}
       </s-section>
 
       <FlowGuide available={loaded.plan.flowAutomation} plans={loaded.flowPlans} />

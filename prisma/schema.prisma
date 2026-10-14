@@ -79,6 +79,9 @@ model Shop {
   handlingDays Int     @default(1)
   transitDays  Int     @default(3)
   skipWeekends Boolean @default(true)
+  // First/last save of the Settings page — ticks "Set your shipping days" in
+  // the Get started checklist even when the defaults were kept on purpose.
+  settingsSavedAt DateTime?
 
   // Unused since 2026-10-14 (merchants can't bring their own weather key).
   weatherApiKeyEnc String?

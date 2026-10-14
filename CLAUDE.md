@@ -233,6 +233,15 @@ switch confirmed inline, "Compare all features" table.
   development stores (`shop.plan.partnerDevelopment`). A test subscription
   only unlocks a plan in those same conditions.
 
+## Get started checklist (Plans page)
+
+Ticks come from the shop's own data: slip saved (`slipDesign`), shipping
+days (`Shop.settingsSavedAt` — set on every Settings save; the page shows
+"These shipping days are right" until then, because Save is disabled
+while nothing changed; migration backfills shops already off the 1/3
+defaults), first print (`CountedOrder`), template request. Steps done
+outside the app (Flow, Shopify's print menu, snippet) can't be ticked.
+
 ## Printed orders (added 2026-10-14)
 
 `PrintedOrder (shop, orderId, firstPrintedAt, lastPrintedAt, printCount)`,

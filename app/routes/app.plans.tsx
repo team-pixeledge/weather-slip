@@ -61,7 +61,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const features = PLANS[billing.plan];
   const checklist = {
     slipSaved: shop.slipDesign != null,
-    shippingDaysSet: shop.handlingDays !== 1 || shop.transitDays !== 3 || !shop.skipWeekends,
+    // Saved once (defaults kept on purpose count too), or moved off them.
+    shippingDaysSet:
+      shop.settingsSavedAt != null || shop.handlingDays !== 1 || shop.transitDays !== 3 || !shop.skipWeekends,
     printed: printedOrders > 0,
     requested: templateRequests > 0,
     printFromShopify: features.printFromShopify,
@@ -300,8 +302,8 @@ function Checklist({ c }: { c: ChecklistState }) {
       body: (
         <>
           In <s-link href="/app/settings">Settings</s-link> set handling and
-          transit days so dispatch and delivery land on the right days. (Ticks
-          once you change the defaults — 1 handling, 3 transit.)
+          transit days so dispatch and delivery land on the right days, then
+          click Save — even if the defaults (1 handling, 3 transit) suit you.
         </>
       ),
     },
