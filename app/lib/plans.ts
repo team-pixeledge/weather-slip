@@ -23,6 +23,13 @@ export interface PlanLimits {
   dispatchForecast: boolean;
   /** Forecast days after today on slips and the saved summary (provider max 4). */
   forecastDaysAhead: number;
+  /**
+   * Shipping days used for the dispatch/delivery dates — fixed by the plan,
+   * not editable (user decision 2026-10-14). Handling + transit stays within
+   * forecastDaysAhead, so the delivery day always has a forecast.
+   */
+  handlingDays: number;
+  transitDays: number;
   /** Print action in Shopify's own Orders section. */
   printFromShopify: boolean;
   customerList: boolean;
@@ -57,6 +64,8 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     allTemplates: false,
     dispatchForecast: false,
     forecastDaysAhead: 2,
+    handlingDays: 1,
+    transitDays: 1,
     printFromShopify: false,
     customerList: false,
     languages: false,
@@ -77,6 +86,8 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     allTemplates: true,
     dispatchForecast: true,
     forecastDaysAhead: 2,
+    handlingDays: 1,
+    transitDays: 1,
     printFromShopify: true,
     customerList: true,
     languages: false,
@@ -97,6 +108,8 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     allTemplates: true,
     dispatchForecast: true,
     forecastDaysAhead: 3,
+    handlingDays: 1,
+    transitDays: 2,
     printFromShopify: true,
     customerList: true,
     languages: true,
@@ -118,6 +131,8 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     allTemplates: true,
     dispatchForecast: true,
     forecastDaysAhead: 4,
+    handlingDays: 1,
+    transitDays: 3,
     printFromShopify: true,
     customerList: true,
     languages: true,
@@ -217,6 +232,12 @@ export function planAllowsOrder(
 ): boolean {
   if (PLANS[plan].orderViews.length > 1 || printedBefore) return true;
   return !order.cancelledAt && !order.closed && !["FULFILLED", "RESTOCKED"].includes(order.displayFulfillmentStatus);
+}
+
+/** Handling/transit days for a shop: the plan's, weekdays-only is the shop's choice. */
+export function planShippingDays(shop: { plan: PlanId; skipWeekends: boolean }) {
+  const p = PLANS[shop.plan];
+  return { handlingDays: p.handlingDays, transitDays: p.transitDays, skipWeekends: shop.skipWeekends };
 }
 
 /** A view this plan may open; anything else falls back to its default. */

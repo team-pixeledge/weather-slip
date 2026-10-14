@@ -61,9 +61,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const features = PLANS[billing.plan];
   const checklist = {
     slipSaved: shop.slipDesign != null,
-    // Saved once (defaults kept on purpose count too), or moved off them.
-    shippingDaysSet:
-      shop.settingsSavedAt != null || shop.handlingDays !== 1 || shop.transitDays !== 3 || !shop.skipWeekends,
     printed: printedOrders > 0,
     requested: templateRequests > 0,
     printFromShopify: features.printFromShopify,
@@ -207,7 +204,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Which orders are listed?",
-    "Free and Starter list and print unfulfilled and partially fulfilled orders — partially fulfilled ones print only the items still to ship, and an order printed before it shipped can always be reprinted. Free slips show the delivery day; the dispatch day is on Starter and up. Pro and Business can also open fulfilled, unpaid, cancelled and archived orders. POS sales and local pickup orders are never listed: they have no shipping address, so there's nothing to forecast.",
+    "Free and Starter list and print unfulfilled and partially fulfilled orders — partially fulfilled ones print only the items still to ship, and an order printed before it shipped can always be reprinted. Free slips show the delivery day; the dispatch day is on Starter and up. Dispatch and delivery dates use shipping days set by the plan — 1 handling day, then 1 transit day on Free and Starter, 2 on Pro, 3 on Business — or the real fulfillment and carrier dates once the order ships. Pro and Business can also open fulfilled, unpaid, cancelled and archived orders. POS sales and local pickup orders are never listed: they have no shipping address, so there's nothing to forecast.",
   ],
   [
     "What do the warning badges and the tip on the slip mean?",
@@ -265,7 +262,6 @@ const FAQ: [string, string][] = [
 
 interface ChecklistState {
   slipSaved: boolean;
-  shippingDaysSet: boolean;
   printed: boolean;
   requested: boolean;
   printFromShopify: boolean;
@@ -293,17 +289,6 @@ function Checklist({ c }: { c: ChecklistState }) {
           In <s-link href="/app/slip">Packing slip</s-link> pick a template and
           set your logo, colours, language, forecast days, weather tip and
           QR code or barcode. Save once to tick this off.
-        </>
-      ),
-    },
-    {
-      title: "Set your shipping days",
-      done: c.shippingDaysSet,
-      body: (
-        <>
-          In <s-link href="/app/settings">Settings</s-link> set handling and
-          transit days so dispatch and delivery land on the right days, then
-          click Save — even if the defaults (1 handling, 3 transit) suit you.
         </>
       ),
     },

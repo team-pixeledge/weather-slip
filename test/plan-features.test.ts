@@ -290,3 +290,13 @@ describe("forecast days by plan", () => {
     expect(await cards("PRO")).toContain("Rain expected on delivery day");
   });
 });
+
+describe("shipping days by plan", () => {
+  it("are fixed per plan and keep delivery inside the forecast range", async () => {
+    const { planShippingDays, PLANS: P } = await import("../app/lib/plans");
+    expect(planShippingDays({ plan: "FREE", skipWeekends: true })).toEqual({ handlingDays: 1, transitDays: 1, skipWeekends: true });
+    expect(planShippingDays({ plan: "PRO", skipWeekends: false }).transitDays).toBe(2);
+    expect(planShippingDays({ plan: "BUSINESS", skipWeekends: true }).transitDays).toBe(3);
+    for (const p of Object.values(P)) expect(p.handlingDays + p.transitDays).toBeLessThanOrEqual(p.forecastDaysAhead);
+  });
+});

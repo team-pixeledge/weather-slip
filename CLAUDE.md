@@ -235,11 +235,9 @@ switch confirmed inline, "Compare all features" table.
 
 ## Get started checklist (Plans page)
 
-Ticks come from the shop's own data: slip saved (`slipDesign`), shipping
-days (`Shop.settingsSavedAt` — set on every Settings save; the page shows
-"These shipping days are right" until then, because Save is disabled
-while nothing changed; migration backfills shops already off the 1/3
-defaults), first print (`CountedOrder`), template request. Steps done
+Ticks come from the shop's own data: slip saved (`slipDesign`), first
+print (`CountedOrder`), template request. (The shipping-days step was
+removed when shipping days became fixed by plan.) Steps done
 outside the app (Flow, Shopify's print menu, snippet) can't be ticked.
 
 ## Printed orders (added 2026-10-14)
@@ -287,6 +285,14 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
   trim the saved forecast at render, so upgrades show more on old orders;
   notes/tips only use shown days) and caps the saved summary's horizon in
   order-weather.server (pending fills wait until the date is in range).
+- **Shipping days fixed by plan** (user decision 2026-10-14, after being
+  told it makes delivery dates approximate): handling 1 + transit 1/1/2/3
+  (Free/Starter/Pro/Business) via `planShippingDays` in
+  `orderShippingDates`; Settings shows them read-only, "Count weekdays
+  only" stays the shop's. `Shop.handlingDays/transitDays` and
+  `settingsSavedAt` are now unused (kept in the schema); the "Set your
+  shipping days" checklist step was removed. handling + transit ≤
+  forecastDaysAhead (tested).
 - Free/Starter "unfulfilled only" is enforced at print too
   (`planAllowsOrder` in the print route: fulfilled/restocked/cancelled/
   closed orders are skipped unless printed before; skipped ones are named in

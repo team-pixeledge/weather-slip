@@ -11,7 +11,7 @@ import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { addDays } from "../lib/dates";
 import { formatSummary, type DisplaySettings, type Unit } from "../lib/format";
-import { PLANS, plansWith } from "../lib/plans";
+import { PLANS, planShippingDays, plansWith } from "../lib/plans";
 import { ensureShop } from "../lib/shop.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -25,19 +25,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       showDelivery: shop.showDelivery,
       showPrecip: shop.showPrecip,
       showLocation: shop.showLocation,
-      handlingDays: shop.handlingDays,
-      transitDays: shop.transitDays,
       skipWeekends: shop.skipWeekends,
     },
-    // Shipping days confirmed at least once (Get started checklist).
-    daysConfirmed: shop.settingsSavedAt != null,
+    // Fixed by the plan (read-only here).
+    shipping: planShippingDays(shop),
     plan: PLANS[shop.plan],
     flowPlans: plansWith((p) => p.flowAutomation),
   };
 };
 
-const clampDays = (v: unknown) =>
-  Math.min(30, Math.max(0, Math.trunc(Number(v) || 0)));
+const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -54,8 +51,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     showDelivery: body.showDelivery === true,
     showPrecip: body.showPrecip === true,
     showLocation: body.showLocation === true,
-    handlingDays: clampDays(body.handlingDays),
-    transitDays: clampDays(body.transitDays),
     skipWeekends: body.skipWeekends === true,
     settingsSavedAt: new Date(),
   };
@@ -193,40 +188,31 @@ export default function Settings() {
       </s-section>
 
       <s-section heading="Shipping dates">
-        <s-number-field
-          label="Handling time (days from order to dispatch)"
-          value={String(s.handlingDays)}
-          min={0}
-          max={30}
-          onChange={(e) =>
-            setS({ ...s, handlingDays: Number(e.currentTarget.value) })
-          }
-        />
-        <s-number-field
-          label="Transit time (days from dispatch to delivery)"
-          value={String(s.transitDays)}
-          min={0}
-          max={30}
-          onChange={(e) =>
-            setS({ ...s, transitDays: Number(e.currentTarget.value) })
-          }
-        />
+        {/* Fixed by the plan (user decision 2026-10-14) — not editable. */}
+        <s-stack direction="block" gap="small-200">
+          <s-text>
+            <strong>Handling time:</strong> {days(loaded.shipping.handlingDays)} from order to
+            dispatch
+          </s-text>
+          <s-text>
+            <strong>Transit time:</strong> {days(loaded.shipping.transitDays)} from dispatch to
+            delivery
+          </s-text>
+          <s-text color="subdued">
+            Set by your {loaded.plan.name} plan.{" "}
+            {loaded.plan.name !== "Business" && (
+              <>
+                Higher plans allow a longer transit time, so the slip can forecast further
+                ahead — <s-link href="/app/plans">see plans</s-link>.
+              </>
+            )}
+          </s-text>
+        </s-stack>
         {toggle("skipWeekends", "Count weekdays only")}
         <s-paragraph>
           Once an order ships, its real fulfillment date and the carrier&apos;s
           estimated delivery date are used instead, when Shopify has them.
         </s-paragraph>
-        {/* Save is disabled until something changes, so a merchant happy
-            with the defaults needs a way to confirm them (ticks the Get
-            started step). Gone once Settings has been saved. */}
-        {!loaded.daysConfirmed && !dirty && (
-          <s-button
-            onClick={save}
-            {...(fetcher.state !== "idle" ? { loading: true } : {})}
-          >
-            These shipping days are right
-          </s-button>
-        )}
       </s-section>
 
       <FlowGuide available={loaded.plan.flowAutomation} plans={loaded.flowPlans} />

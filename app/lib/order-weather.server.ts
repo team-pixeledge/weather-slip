@@ -8,7 +8,7 @@ import {
 } from "./constants";
 import { localDate, shippingDates } from "./dates";
 import { locationKey } from "./location";
-import { PLANS } from "./plans";
+import { planShippingDays, PLANS } from "./plans";
 import { displaySettings, ensureShop, isCounted, providerFor } from "./shop.server";
 import {
   buildSnapshot,
@@ -81,7 +81,8 @@ export function orderShippingDates(
         ? localDate(new Date(fulfillment.estimatedDeliveryAt), tz)
         : null,
     },
-    shop,
+    // Fixed by the plan (planShippingDays), not Shop.handlingDays/transitDays.
+    planShippingDays(shop),
   );
 }
 
