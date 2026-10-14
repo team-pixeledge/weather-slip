@@ -1,6 +1,6 @@
 import { PassThrough } from "stream";
 import { renderToPipeableStream } from "react-dom/server";
-import { ServerRouter } from "react-router";
+import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
 import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
@@ -12,10 +12,29 @@ import { notifyAdminLater } from "./lib/alerts.server";
  * (throttled per message). Aborted requests are the browser navigating
  * away, not breakage.
  */
+const safeJson = (v: unknown) => {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+};
+
 export function handleError(error: unknown, { request }: { request: Request }) {
   if (request.signal.aborted) return;
   console.error(error);
-  const msg = error instanceof Error ? error.message : String(error);
+  // 4xx route responses aren't faults: a tab still on the previous build
+  // asking for an old /assets chunk right after a deploy (404 — emailed as
+  // "[object Object]" on 2026-10-14), bots probing URLs, expired sessions.
+  if (isRouteErrorResponse(error) && error.status < 500) return;
+  const msg =
+    error instanceof Error
+      ? error.message
+      : isRouteErrorResponse(error)
+        ? `${error.status} ${error.statusText} ${typeof error.data === "string" ? error.data : safeJson(error.data)}`
+        : typeof error === "object"
+          ? safeJson(error)
+          : String(error);
   const path = new URL(request.url).pathname;
   notifyAdminLater(
     `server-error:${path}:${msg.slice(0, 80)}`,
