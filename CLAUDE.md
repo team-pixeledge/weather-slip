@@ -233,6 +233,16 @@ switch confirmed inline, "Compare all features" table.
   development stores (`shop.plan.partnerDevelopment`). A test subscription
   only unlocks a plan in those same conditions.
 
+## Embedded reloads (fixed 2026-10-14)
+
+A page showing only "200" = a hard reload inside the iframe without
+Shopify's shop/host params (React Router dropped them on client
+navigation; lazy route discovery hard-reloaded after a deploy). Fixed by
+`routeDiscovery: { mode: "initial" }` (react-router.config.ts) plus the
+`RELOAD_GUARD` script in root.tsx (restores shop/host from sessionStorage
+once, then Shopify's session-token bounce runs) and a friendly root
+ErrorBoundary. Keep both when touching root/config.
+
 ## Plan ladder (user decision 2026-10-14: higher plans must clearly get more)
 
 Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
