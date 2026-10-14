@@ -1,0 +1,5 @@
+{
+  "name": "Enregistrer la météo quand une commande est payée",
+  "description": "Weather Slip enregistre les prévisions de destination sur chaque commande payée, pour imprimer son bon de livraison avec la météo.",
+  "preInstallNote": "Nécessite Weather Slip Pro ou Business. L'enregistrement est gratuit ; l'impression du bon utilise une impression de votre forfait."
+}

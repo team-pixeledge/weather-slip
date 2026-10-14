@@ -297,6 +297,14 @@ then finish in the background and return 200. 4xx bodies
 reached (not 429 — that retries for 36 h), 404 order. Weather failure →
 503 so Flow retries. Needs `shopify app deploy` to exist in Flow.
 
+Flow template `extensions/weather-slip-flow-paid` (released in
+weather-slip-11, 2026-10-14): "Order paid → Save weather on order".
+`template.flow` is the Flow editor's export, kept verbatim (its hash
+prefix isn't a plain SHA-256 — don't hand-edit; rebuild in Flow and
+re-export). Locales en + fr. Shopify reviews templates before they show in
+the library; the deep link for an in-app "Set up in Flow" button comes from
+the library's Share button after publishing.
+
 ## Custom template requests (Business, added 2026-10-14)
 
 `TemplateRequest` table (migration `20261014120000_template_requests`),

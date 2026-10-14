@@ -1,0 +1,28 @@
+# Flow template: "Order paid → Save weather on order" (Weather Slip Pro and
+# Business). template.flow is the Flow editor's own export (2026-10-14) —
+# keep it byte-for-byte (its leading hash covers the JSON); to change the
+# workflow, rebuild it in Flow and export again. Templates are reviewed by
+# Shopify before they appear in the Flow library; once published, the
+# library's Share button gives the link the app can open.
+[[extensions]]
+name = "t:name"
+handle = "weather-slip-flow-paid"
+type = "flow_template"
+uid = "2486703d-6835-12a8-0fa2-170502d9c4dc23444adc"
+description = "t:description"
+
+[extensions.template]
+
+categories = ["orders", "fulfillment"]
+
+module = "./template.flow"
+
+# When require_app is true your template will only be visible to users who have
+# your app installed. Below are the common selections:
+# Public apps require_app = false
+# Non public apps require_app = true
+require_app = false
+
+discoverable = true
+
+enabled = true

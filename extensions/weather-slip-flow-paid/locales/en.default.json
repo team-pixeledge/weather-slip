@@ -1,0 +1,5 @@
+{
+  "name": "Save weather when an order is paid",
+  "description": "Weather Slip saves the destination forecast on every paid order, so its packing slip prints instantly with weather.",
+  "preInstallNote": "Needs Weather Slip Pro or Business. Saving weather is free; printing the slip uses one print from your plan."
+}
