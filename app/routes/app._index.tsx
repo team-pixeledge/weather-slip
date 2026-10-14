@@ -100,13 +100,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const printed = rows.length
     ? await prisma.printedOrder.findMany({
         where: { shop: session.shop, orderId: { in: rows.map((r) => r.id) } },
-        select: { orderId: true, printCount: true, lastPrintedAt: true },
+        select: { orderId: true, printCount: true, lastPrintedAt: true, printedAt: true },
       })
     : [];
   const printedBy = new Map(printed.map((p) => [p.orderId, p]));
   const rowsWithPrints = rows.map((r) => {
     const p = printedBy.get(r.id);
-    return { ...r, printed: p ? { count: p.printCount, last: p.lastPrintedAt.toISOString() } : null };
+    return {
+      ...r,
+      printed: p
+        ? {
+            count: p.printCount,
+            // Newest first for the tooltip; rows from before the history
+            // existed fall back to the latest print.
+            dates: (p.printedAt.length ? p.printedAt : [p.lastPrintedAt]).map((d) => d.toISOString()).reverse(),
+          }
+        : null,
+    };
   });
 
 
@@ -138,15 +148,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 const Dim = ({ on, children }: { on: boolean; children: React.ReactNode }) =>
   on ? <span style={{ opacity: 0.5 }}>{children}</span> : <>{children}</>;
 
-/** "1 Printed on 14th Oct", "3 Printed on 2nd Nov" (count, last print). */
-const printedLabel = (p: { count: number; last: string }) => {
-  const d = new Date(p.last);
+/** "14th Oct 2026, 4:11 pm" in the merchant's browser time. */
+const printedWhen = (iso: string) => {
+  const d = new Date(iso);
   const day = d.getDate();
   const suffix =
     day % 100 >= 11 && day % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th";
-  const month = d.toLocaleDateString("en-GB", { month: "short" });
-  return `${p.count} Printed on ${day}${suffix} ${month}`;
+  const month = d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  return `${day}${suffix} ${month}, ${time}`;
 };
+
+/** Short badge ("3 Printed"); every print date is in its tooltip. */
+function PrintedBadge({ id, printed }: { id: string; printed: { count: number; dates: string[] } }) {
+  const tip = `printed-${id}`;
+  const older = printed.count - printed.dates.length;
+  return (
+    <>
+      <s-clickable interestFor={tip} accessibilityLabel={`Printed ${printed.count} times — show dates`}>
+        <s-badge tone="success">{`${printed.count} Printed`}</s-badge>
+      </s-clickable>
+      <s-tooltip id={tip}>
+        {printed.dates.map((d) => (
+          <s-paragraph key={d}>{printedWhen(d)}</s-paragraph>
+        ))}
+        {older > 0 && <s-paragraph>{`+ ${older} earlier`}</s-paragraph>}
+      </s-tooltip>
+    </>
+  );
+}
 
 export default function Orders() {
   const {
@@ -501,7 +531,7 @@ export default function Orders() {
                       >
                         {dim ? "Reprint" : "Print slip"}
                       </s-button>
-                      {r.printed && <s-badge tone="success">{printedLabel(r.printed)}</s-badge>}
+                      {r.printed && <PrintedBadge id={r.id} printed={r.printed} />}
                     </s-stack>
                   </s-table-cell>
                 </s-table-row>

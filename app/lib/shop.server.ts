@@ -163,6 +163,9 @@ export async function markCounted(shop: string, orderId: string, now = new Date(
     ON CONFLICT DO NOTHING`;
 }
 
+/** Print dates kept per order for the Orders page tooltip. */
+export const PRINT_HISTORY_MAX = 50;
+
 /**
  * Remember that these orders' slips were printed (Orders page: dimmed row,
  * "Reprint"). A repeat within PRINT_RECHARGE_MS doesn't add to printCount.
@@ -173,10 +176,15 @@ export async function recordPrints(shop: string, orderIds: string[], now = new D
   const since = new Date(now.getTime() - PRINT_RECHARGE_MS);
   try {
     await prisma.$executeRaw`
-      INSERT INTO "PrintedOrder" ("shop", "orderId", "firstPrintedAt", "lastPrintedAt", "printCount")
-      SELECT ${shop}, id, ${now}, ${now}, 1 FROM unnest(${orderIds}::text[]) AS id
+      INSERT INTO "PrintedOrder" ("shop", "orderId", "firstPrintedAt", "lastPrintedAt", "printCount", "printedAt")
+      SELECT ${shop}, id, ${now}, ${now}, 1, ARRAY[${now}::timestamp(3)] FROM unnest(${orderIds}::text[]) AS id
       ON CONFLICT ("shop", "orderId") DO UPDATE SET
         "printCount" = "PrintedOrder"."printCount" + CASE WHEN "PrintedOrder"."lastPrintedAt" < ${since} THEN 1 ELSE 0 END,
+        -- History of counted prints, newest last, capped (PRINT_HISTORY_MAX).
+        "printedAt" = CASE WHEN "PrintedOrder"."lastPrintedAt" < ${since}
+          THEN (array_append(COALESCE("PrintedOrder"."printedAt", '{}'), ${now}::timestamp(3)))[
+                 GREATEST(1, COALESCE(cardinality("PrintedOrder"."printedAt"), 0) + 2 - ${PRINT_HISTORY_MAX}):]
+          ELSE "PrintedOrder"."printedAt" END,
         "lastPrintedAt" = EXCLUDED."lastPrintedAt"`;
   } catch (err) {
     console.error("[printed] record failed:", err instanceof Error ? err.message : err);

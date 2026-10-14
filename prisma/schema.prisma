@@ -126,6 +126,9 @@ model PrintedOrder {
   firstPrintedAt DateTime @default(now())
   lastPrintedAt  DateTime @default(now())
   printCount     Int      @default(1)
+  // When each counted print happened (newest last), capped at 50 — the
+  // Orders page tooltip lists them.
+  printedAt      DateTime[]
 
   shopRef Shop @relation(fields: [shop], references: [shop], onDelete: Cascade)
 

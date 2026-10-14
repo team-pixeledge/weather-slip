@@ -240,8 +240,11 @@ written by `recordPrints` after every slip render (app tab and admin print
 action; not the customer list) — separate from `CountedOrder` (weather/
 usage), so an order printed without weather still shows as printed. Repeat
 within 10 min doesn't bump printCount. Orders page: printed rows are dimmed
-(`Dim`), green "n Printed on 14th Oct" badge, button "Reprint". No
-Tags column (user request 2026-10-14). Migration
+(`Dim`), green "n Printed" badge whose `s-tooltip` lists every print
+(`printedAt[]`, newest last in the DB, capped at PRINT_HISTORY_MAX = 50;
+"+ n earlier" if the count exceeds the history), button "Reprint". No Tags
+column (user request 2026-10-14). Never interpolate `${…}` inside a SQL
+comment in a Prisma tagged template — it becomes a query parameter. Migration
 `printed_orders` backfills from CountedOrder rows created before per-print
 charging (10:50:24 UTC) or with lastPrintedAt. customers/redact deletes them.
 
