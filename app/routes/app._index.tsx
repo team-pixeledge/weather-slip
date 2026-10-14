@@ -14,7 +14,8 @@ import {
   type OrderRange,
   type OrderView,
 } from "../lib/order-views";
-import { ensureShop } from "../lib/shop.server";
+import { ensureShop, usageSummary } from "../lib/shop.server";
+import { UsageBanner } from "../components/UsageBanner";
 import { isSlipTemplate, SLIP_TEMPLATES, type SlipTemplate } from "../lib/slip";
 import { signPrintToken } from "../lib/print-token.server";
 
@@ -77,6 +78,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const perParam = Number(url.searchParams.get("per"));
   const perPage = (PAGE_SIZES as readonly number[]).includes(perParam) ? perParam : DEFAULT_PAGE_SIZE;
 
+  const shop = await ensureShop(session.shop);
+  const usage = { ...usageSummary(shop), canUpgrade: shop.plan !== "BUSINESS" };
+
   const { rows, pageInfo } = await listOrders(admin, {
     view,
     search,
@@ -93,12 +97,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     range,
     perPage,
     loadedAt: new Date().toISOString(),
+    usage,
     rows,
     pageInfo,
     printToken: signPrintToken(session.shop),
     // Without read_all_orders Shopify only returns the last 60 days.
     allOrdersAccess: (session.scope ?? "").split(",").includes("read_all_orders"),
-    defaultTemplate: (await ensureShop(session.shop)).slipTemplate as SlipTemplate,
+    defaultTemplate: shop.slipTemplate as SlipTemplate,
   };
 };
 
@@ -114,6 +119,7 @@ export default function Orders() {
     printToken,
     defaultTemplate,
     allOrdersAccess,
+    usage,
   } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
   const [, setParams] = useSearchParams();
@@ -199,6 +205,8 @@ export default function Orders() {
       <s-button slot="secondary-actions" href="/app/slip">
         Slip templates
       </s-button>
+
+      <UsageBanner usage={usage} />
 
       {rows.length > 0 && rows.every((r) => !r.customer) && rows.some((r) => r.destination) && (
         // Orders have a city but never a name: Shopify is withholding

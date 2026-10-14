@@ -228,9 +228,10 @@ row counts suppressed repeats). Triggers: OpenWeather 401/429/5xx/timeout
 emails only the highest crossed), a job failing for good, a print
 crashing (`safeRenderPrint` → friendly 500), a plan change failing, slip
 weather failing, any loader/action error (`handleError` in entry.server),
-and the 10-minute GitHub drain stopping (`Heartbeat`; checked by Vercel's
-daily cron, recognised by its `vercel-cron` user agent). Monitoring never
-throws.
+and an order count crossing 80%/100% of the shop's plan (emailed to the
+**shop owner**, not the operator — `usage-alerts.server.ts`; once per level
+per usage period, reset with the period and on a plan change; Orders and
+Plans pages show `UsageBanner` from 80%). Monitoring never throws.
 
 ## Weather providers
 
@@ -263,15 +264,16 @@ the provider. `WEATHER_PROVIDER` picks one:
     (`background.server.ts` — Vercel `waitUntil`; the one file to change
     off Vercel);
   - `/api/cron/drain`, guarded by `Authorization: Bearer $CRON_SECRET` —
-    retries, pending fills, pruning. Called every 10 min by GitHub Actions
-    (`.github/workflows/drain-queue.yml`, repo secrets `APP_URL` +
-    `CRON_SECRET`) and daily by Vercel Cron as a backstop (`vercel.json`).
+    retries, pending fills, pruning. Called daily by Vercel Cron
+    (`vercel.json`); prints and order webhooks drain inline, so the cron
+    only picks up leftovers. The 10-minute GitHub Actions runner was removed
+    2026-10-14 (it never ran — `APP_URL` secret was missing — and its
+    heartbeat check only produced false alarms). `Heartbeat` table unused.
 - **Vercel team "Test" (`test11-fc37`, account teampixeledge-1075) is on
-  Hobby** (user decision 2026-10-12, budget). Hobby crons run at most daily,
-  hence the GitHub Actions scheduler. Hobby's terms are non-commercial:
-  upgrade to Pro before charging merchants, then set `vercel.json` back to
-  `*/10` and delete the workflow. GitHub disables scheduled workflows after
-  60 days without commits.
+  Hobby** (user decision 2026-10-12, budget). Hobby crons run at most daily
+  (user decision: daily is enough for now — don't re-add an external
+  scheduler). Hobby's terms are non-commercial: upgrade to Pro before
+  charging merchants, then set `vercel.json` to `*/10`.
 - Vercel CLI for this account uses its own config dir:
   `vercel --global-config ~/.vercel-teampixeledge …` (the default CLI login
   on this machine is a different account).

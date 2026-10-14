@@ -64,7 +64,11 @@ export async function syncPlan(admin: GraphqlClient, shop: string): Promise<Bill
       (s) => s.status === "ACTIVE" && (testCharge || !s.test) && planFromBillingName(s.name),
     ) ?? null;
   const plan: PlanId = subscription ? planFromBillingName(subscription.name)! : "FREE";
-  await prisma.shop.update({ where: { shop }, data: { plan: plan as Plan } });
+  // A plan change restarts the usage alerts (80% of the new limit is a new threshold).
+  await prisma.shop.updateMany({
+    where: { shop, plan: { not: plan as Plan } },
+    data: { plan: plan as Plan, usageAlertLevel: 0 },
+  });
   return { plan, subscription, devStore, testCharge };
 }
 

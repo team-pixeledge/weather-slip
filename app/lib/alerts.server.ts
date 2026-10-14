@@ -17,9 +17,9 @@ const HOUR = 60 * 60 * 1000;
 export const OPENWEATHER_FREE_MONTHLY = 1_000_000;
 const USAGE_THRESHOLDS = [50, 80, 95, 100];
 
-function transport() {
+function transport(to = process.env.ALERT_EMAIL_TO) {
   const host = process.env.SMTP_HOST;
-  if (!host || !process.env.ALERT_EMAIL_TO) return null;
+  if (!host || !to) return null;
   const port = Number(process.env.SMTP_PORT || 587);
   return nodemailer.createTransport({
     host,
@@ -46,6 +46,22 @@ export async function sendAlertEmail(subject: string, text: string): Promise<boo
     return true;
   } catch (err) {
     console.error("[alert] email failed:", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
+/** Email a merchant (not the operator). Returns false if mail isn't configured or fails. */
+export async function sendMerchantEmail(to: string, subject: string, text: string): Promise<boolean> {
+  const t = transport(to);
+  if (!t) {
+    console.error(`[merchant-email] (email not configured) to ${to}: ${subject}`);
+    return false;
+  }
+  try {
+    await t.sendMail({ from: process.env.ALERT_EMAIL_FROM || process.env.SMTP_USER, to, subject, text });
+    return true;
+  } catch (err) {
+    console.error("[merchant-email] failed:", err instanceof Error ? err.message : err);
     return false;
   }
 }
@@ -122,24 +138,5 @@ export async function recordApiCall(provider: string, monthlyLimit: number, now 
     }
   } catch (err) {
     console.error("[alert] usage count failed:", err instanceof Error ? err.message : err);
-  }
-}
-
-export async function beat(key: string, now = new Date()) {
-  await prisma.heartbeat.upsert({ where: { key }, create: { key, at: now }, update: { at: now } });
-}
-
-/** Alert if a heartbeat is older than `maxAgeMs` (or has never been seen). */
-export async function checkHeartbeat(key: string, maxAgeMs: number, what: string, now = new Date()) {
-  const hb = await prisma.heartbeat.findUnique({ where: { key } });
-  if (!hb || now.getTime() - hb.at.getTime() > maxAgeMs) {
-    await notifyAdmin(
-      `heartbeat:${key}`,
-      `${what} has stopped`,
-      hb
-        ? `${what} last ran at ${hb.at.toISOString()} (${Math.round((now.getTime() - hb.at.getTime()) / 60000)} minutes ago).`
-        : `${what} has never reported in.`,
-      { throttleMs: 6 * HOUR },
-    );
   }
 }

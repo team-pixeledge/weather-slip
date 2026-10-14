@@ -102,6 +102,9 @@ model Shop {
   // Usage: orders that got a first snapshot in the current 30-day period.
   usagePeriodStart DateTime @default(now())
   usageCount       Int      @default(0)
+  // Highest usage alert emailed this period (0, 80 or 100). Reset with the
+  // period and on a plan change — see usage-alerts.server.ts.
+  usageAlertLevel  Int      @default(0)
 
   updatedAt DateTime @updatedAt
 
@@ -229,7 +232,7 @@ model ApiUsage {
   updatedAt  DateTime @updatedAt
 }
 
-// "Last seen alive" times, e.g. the 10-minute queue drain.
+// Unused since 2026-10-14 (the 10-minute GitHub drain was removed).
 model Heartbeat {
   key String   @id
   at  DateTime

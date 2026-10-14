@@ -24,7 +24,8 @@ import {
   USAGE_PERIOD_DAYS,
   type PlanId,
 } from "../lib/plans";
-import { ensureShop } from "../lib/shop.server";
+import { ensureShop, usageSummary } from "../lib/shop.server";
+import { UsageBanner } from "../components/UsageBanner";
 import { notifyAdmin } from "../lib/alerts.server";
 
 // Plans & pricing — also the app's usage overview (the old Overview page was
@@ -51,7 +52,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     where: { shop: session.shop, status: "FAILED" },
   });
 
+  const usage = {
+    ...usageSummary({ ...shop, plan: billing.plan }, now),
+    canUpgrade: billing.plan !== "BUSINESS",
+  };
+
   return {
+    usage,
     current: billing.plan,
     subscription: billing.subscription,
     testCharge: billing.testCharge,
@@ -212,7 +219,7 @@ export default function Plans() {
   };
 
   const limit = current.ordersPerPeriod;
-  const pct = Math.min(100, Math.round((d.used / Math.max(1, limit)) * 100));
+  const pct = d.usage.pct;
   const rank = (id: PlanId) => PLAN_ORDER.indexOf(id);
 
   return (
@@ -240,6 +247,13 @@ export default function Plans() {
             anytime.
           </s-text>
         </div>
+
+        <UsageBanner
+          usage={d.usage}
+          onUpgrade={() =>
+            document.getElementById("all-plans")?.scrollIntoView({ behavior: "smooth" })
+          }
+        />
 
         {/* ---- current plan + usage (was the Overview page) ---- */}
         <s-section>
@@ -290,17 +304,6 @@ export default function Plans() {
                 your Shopify invoice
               </s-text>
             )}
-            {pct >= 100 && (
-              <s-text tone="critical">
-                Limit reached — new slips print without weather until{" "}
-                {fmtDate(d.resetsAt)}. Upgrade to keep weather on every slip.
-              </s-text>
-            )}
-            {pct >= 80 && pct < 100 && (
-              <s-text tone="caution">
-                You&apos;ve used {pct}% of this month&apos;s orders.
-              </s-text>
-            )}
             {d.failedJobs > 0 && (
               <s-text tone="caution">
                 {d.failedJobs} order(s) couldn&apos;t save weather after several
@@ -339,7 +342,7 @@ export default function Plans() {
         )}
 
         {/* ---- plan cards ---- */}
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: -8 }}>
+        <div id="all-plans" style={{ fontSize: 15, fontWeight: 650, marginBottom: -8 }}>
           All plans
         </div>
         {/* Plain CSS grid: one row of cards on desktop, wrapping on narrow

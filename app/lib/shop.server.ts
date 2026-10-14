@@ -6,6 +6,7 @@ import { sanitizeDesign, type SlipOptions } from "./slip";
 import { OpenMeteoProvider } from "./weather/open-meteo.server";
 import { OpenWeatherProvider } from "./weather/openweather.server";
 import type { WeatherProvider } from "./weather/types";
+import { runInBackground } from "./background.server";
 import { notifyAdminLater, OPENWEATHER_FREE_MONTHLY, recordApiCall } from "./alerts.server";
 
 /** Count every OpenWeather call and alert the operator on failures. */
@@ -100,7 +101,7 @@ export async function consumeUsage(
   if (now.getTime() - shop.usagePeriodStart.getTime() >= periodMs) {
     await db.shop.updateMany({
       where: { shop: shop.shop, usagePeriodStart: shop.usagePeriodStart },
-      data: { usagePeriodStart: now, usageCount: 0 },
+      data: { usagePeriodStart: now, usageCount: 0, usageAlertLevel: 0 },
     });
   }
   const limit = PLANS[shop.plan].ordersPerPeriod;
@@ -122,15 +123,20 @@ class LimitReached extends Error {}
  */
 export async function countOrder(shop: Shop, orderId: string, now = new Date()): Promise<boolean> {
   try {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const inserted = await tx.$executeRaw`
         INSERT INTO "CountedOrder" ("shop", "orderId", "countedAt")
         VALUES (${shop.shop}, ${orderId}, ${now})
         ON CONFLICT DO NOTHING`;
-      if (inserted === 0) return true;
-      if (await consumeUsage(shop, now, tx)) return true;
+      if (inserted === 0) return "already" as const;
+      if (await consumeUsage(shop, now, tx)) return "counted" as const;
       throw new LimitReached();
     });
+    if (result === "counted") {
+      // Lazy import: usage-alerts reaches shopify.server, which imports this file.
+      runInBackground(import("./usage-alerts.server").then((m) => m.notifyUsageIfNeeded(shop.shop)));
+    }
+    return true;
   } catch (err) {
     if (err instanceof LimitReached) return false;
     throw err;
@@ -143,4 +149,18 @@ export async function isCounted(shop: string, orderId: string): Promise<boolean>
     select: { shop: true },
   });
   return row != null;
+}
+
+/** This period's usage, as the merchant sees it (a lapsed period reads as 0). */
+export function usageSummary(shop: Shop, now = Date.now()) {
+  const periodMs = USAGE_PERIOD_DAYS * 86_400_000;
+  const elapsed = now - shop.usagePeriodStart.getTime() >= periodMs;
+  const used = elapsed ? 0 : shop.usageCount;
+  const limit = PLANS[shop.plan].ordersPerPeriod;
+  return {
+    used,
+    limit,
+    pct: Math.min(100, Math.floor((used / limit) * 100)),
+    resetsAt: new Date(elapsed ? now + periodMs : shop.usagePeriodStart.getTime() + periodMs).toISOString(),
+  };
 }
