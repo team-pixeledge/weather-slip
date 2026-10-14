@@ -313,6 +313,12 @@ the provider. `WEATHER_PROVIDER` picks one:
 - Merchants can't use their own weather API key (removed 2026-10-14, user
   decision: the app is the product — don't re-add a bring-your-own-key
   option). `Shop.weatherApiKeyEnc` is left in the schema, unused.
+- **Attribution is mandatory** (OpenWeather: ODbL, visible credit where
+  the data is shown — a FAQ alone isn't enough). Every slip prints
+  "Weather data © <provider>" (`creditHtml`, translated, never hidden by
+  `showBranding`); `SlipWeather.source` records the provider (old saved
+  forecasts read as openweather); the Shopify snippet carries the line too.
+  Listing copy: `docs/app-store-listing.md` — no "live" weather claims.
 - OpenWeather gives a UTC offset, not an IANA zone: `utcOffsetSec` is kept
   exactly (India +5:30) — `destinationToday()` uses it. Don't round it.
 

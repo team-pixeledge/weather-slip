@@ -13,10 +13,12 @@ const field = `order.metafields.${METAFIELD_NAMESPACE}.${METAFIELD_SUMMARY_KEY}`
 // slip is first printed in the app, long after that email goes out.
 // The same one-line snippet works in each of these because they all expose
 // order metafields to Liquid. Kept to the plain summary text: it's the
-// lowest common denominator every renderer handles.
+// lowest common denominator every renderer handles. The credit line is
+// OpenWeather's licence (visible attribution wherever its data is shown).
 const SNIPPET = `{% if ${field} != blank %}
   <p style="margin:8px 0;font-size:12px;">
     <strong>Destination weather:</strong> {{ ${field} }}
+    <br><span style="font-size:9px;color:#888;">Weather data © OpenWeather</span>
   </p>
 {% endif %}`;
 
@@ -69,6 +71,8 @@ export default function Snippets() {
       <s-paragraph>
         An order&apos;s weather is saved to it the first time you print its
         slip from the app; these templates then show that saved weather.
+        Keep the &ldquo;Weather data © OpenWeather&rdquo; line: the weather
+        data&apos;s licence requires it wherever the weather is shown.
       </s-paragraph>
       <s-section heading="The snippet">
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">

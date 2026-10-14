@@ -59,6 +59,8 @@ export interface SlipStrings {
   low: string;
   rain: string;
   forecastAsOf: string;
+  /** Precedes the provider credit: "Weather data © OpenWeather". */
+  weatherData: string;
   noForecastDays: string;
   limitReached: string;
   noLocation: string;
@@ -134,6 +136,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Low",
     rain: "Rain chance",
     forecastAsOf: "Forecast as of",
+    weatherData: "Weather data",
     noForecastDays: "No forecast days available.",
     limitReached: "Weather not included: this month's plan limit is reached.",
     noLocation: "Weather not available: no shipping destination.",
@@ -205,6 +208,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Min.",
     rain: "Risque de pluie",
     forecastAsOf: "Prévisions du",
+    weatherData: "Données météo",
     noForecastDays: "Aucune prévision disponible.",
     limitReached: "Météo non incluse : la limite mensuelle du forfait est atteinte.",
     noLocation: "Météo non disponible : aucune adresse de livraison.",
@@ -276,6 +280,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Min.",
     rain: "Regenrisiko",
     forecastAsOf: "Vorhersage vom",
+    weatherData: "Wetterdaten",
     noForecastDays: "Keine Vorhersage verfügbar.",
     limitReached: "Ohne Wetter: Das Monatslimit des Tarifs ist erreicht.",
     noLocation: "Kein Wetter verfügbar: keine Lieferadresse.",
@@ -347,6 +352,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Mín.",
     rain: "Prob. de lluvia",
     forecastAsOf: "Previsión del",
+    weatherData: "Datos meteorológicos",
     noForecastDays: "No hay previsión disponible.",
     limitReached: "Tiempo no incluido: se ha alcanzado el límite mensual del plan.",
     noLocation: "Tiempo no disponible: no hay dirección de envío.",
@@ -418,6 +424,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Min",
     rain: "Prob. pioggia",
     forecastAsOf: "Previsioni del",
+    weatherData: "Dati meteo",
     noForecastDays: "Nessuna previsione disponibile.",
     limitReached: "Meteo non incluso: è stato raggiunto il limite mensile del piano.",
     noLocation: "Meteo non disponibile: nessun indirizzo di spedizione.",
@@ -489,6 +496,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Mín.",
     rain: "Chance de chuva",
     forecastAsOf: "Previsão de",
+    weatherData: "Dados meteorológicos",
     noForecastDays: "Nenhuma previsão disponível.",
     limitReached: "Previsão não incluída: o limite mensal do plano foi atingido.",
     noLocation: "Previsão indisponível: sem endereço de entrega.",
@@ -560,6 +568,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     low: "Min.",
     rain: "Kans op regen",
     forecastAsOf: "Verwachting van",
+    weatherData: "Weergegevens",
     noForecastDays: "Geen verwachting beschikbaar.",
     limitReached: "Geen weer: de maandlimiet van het abonnement is bereikt.",
     noLocation: "Geen weer beschikbaar: geen verzendadres.",

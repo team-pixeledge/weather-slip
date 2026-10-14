@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PrintOrder, PrintShop } from "../app/lib/orders.server";
 import { NO_SHIPPING_FILTER, orderSearchQuery } from "../app/lib/orders.server";
 import { signPrintToken, verifyPrintToken, PRINT_TOKEN_TTL_MS } from "../app/lib/print-token.server";
-import { escapeHtml, parseSavedSlipWeather, renderCustomerList, renderPackingSlips, slipForecast, type SlipWeather } from "../app/lib/slip";
+import { DEFAULT_SLIP_OPTIONS, escapeHtml, parseSavedSlipWeather, renderCustomerList, renderPackingSlips, slipForecast, type SlipTemplate, type SlipWeather } from "../app/lib/slip";
 import type { ForecastPayload } from "../app/lib/weather/types";
 
 const forecast: ForecastPayload = {
@@ -118,6 +118,7 @@ const weather: SlipWeather = {
   delivery: "2026-10-18",
   ...slipForecast(forecast, "2026-10-12", 4),
   asOf: "2026-10-12T09:00:00Z",
+  source: "openweather",
 };
 
 describe("renderPackingSlips", () => {
@@ -170,6 +171,33 @@ describe("renderCustomerList", () => {
     });
     expect(html).toContain("#1002");
     expect(html.match(/<tr>/g)).toHaveLength(3); // header + 2
+  });
+});
+
+describe("weather data credit (OpenWeather licence)", () => {
+  const templates: SlipTemplate[] = ["CLASSIC", "MINIMAL", "DETAILED", "LABEL_4X6"];
+  it.each(templates)("%s prints it, even with the Weather Slip mark hidden", (template) => {
+    const html = renderPackingSlips(shop, [order], new Map([["1001", weather]]), {
+      unit: "C",
+      timeZone: "Asia/Kolkata",
+      nonce: "n",
+      slip: { ...DEFAULT_SLIP_OPTIONS, template, design: { ...DEFAULT_SLIP_OPTIONS.design, showBranding: false } },
+    });
+    expect(html).toContain("Weather data © OpenWeather");
+  });
+  it("is translated", () => {
+    const html = renderPackingSlips(shop, [order], new Map([["1001", weather]]), {
+      unit: "C",
+      timeZone: "Asia/Kolkata",
+      nonce: "n",
+      slip: { ...DEFAULT_SLIP_OPTIONS, design: { ...DEFAULT_SLIP_OPTIONS.design, language: "de" } },
+    });
+    expect(html).toContain("Wetterdaten © OpenWeather");
+  });
+  it("credits OpenWeather on forecasts saved before the source was recorded", () => {
+    const old: Record<string, unknown> = { ...weather };
+    delete old.source;
+    expect(parseSavedSlipWeather(JSON.stringify(old))).toMatchObject({ source: "openweather" });
   });
 });
 

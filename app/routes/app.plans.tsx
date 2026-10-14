@@ -241,7 +241,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Where does the weather come from, and how far ahead?",
-    "Forecasts come from OpenWeather for the order's shipping city. The slip shows today plus the next 4 days at the destination, with the dispatch and delivery days marked. If the delivery day is further out, the slip says so.",
+    "Weather data © OpenWeather (openweathermap.org), used under the Open Database License (ODbL); every slip carries that credit. The forecast is for the order's shipping city. It is fetched when the order's slip is first printed (or when Shopify Flow saves it) and saved on the order — it isn't live weather, and slips printed from the app always reprint that saved forecast. The slip shows today plus the next 4 days at the destination, with the dispatch and delivery days marked and, by default, the time the forecast was taken. If the delivery day is further out, the slip says so. The one-line weather on Shopify's own packing slip follows the saved weather too; it's updated only if the shipping address changes before the order ships or a day that was beyond the forecast range comes into range, and it's frozen once the order is fulfilled.",
   ],
   [
     "Which printers and paper sizes work?",
@@ -249,7 +249,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "What customer data does the app keep?",
-    "None of your customers' names, street addresses, phone numbers or emails are stored — they're read from Shopify only while printing. The app keeps the city, country and the forecast for each printed order.",
+    "None of your customers' names, street addresses or phone numbers are stored — they're read from Shopify only while printing. The app keeps the city, country, an approximate location (rounded to about 11 km) and the forecast for each printed order, and deletes them when Shopify sends a customer or shop data-deletion request.",
   ],
 ];
 

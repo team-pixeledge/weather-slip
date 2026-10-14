@@ -34,6 +34,8 @@ export type SlipWeather =
       /** Last date the provider forecasts. */
       horizonEnd: IsoDate;
       asOf: string;
+      /** Weather provider id (WeatherProvider.id); credited on the slip. */
+      source: string;
     })
   | (SlipBase & { status: "no_location" | "limit_reached" | "error" });
 
@@ -86,6 +88,9 @@ export function parseSavedSlipWeather(
       days,
       horizonEnd: v.horizonEnd as string,
       asOf: v.asOf as string,
+      // Saved before the source was recorded: OpenWeather was the only
+      // provider in production then.
+      source: str(v.source) ? (v.source as string) : "openweather",
     };
   } catch {
     return null;
@@ -690,6 +695,25 @@ const tipHtml = (t: SlipStrings, w: SlipWeather | undefined, d: SlipDesign) => {
 
 const DROP_ICON = `<svg class="drop" width="9" height="11" viewBox="0 0 9 11" aria-hidden="true" focusable="false"><path d="M4.5 0C3 2.4 0 5.2 0 7.2A4.5 3.8 0 0 0 9 7.2C9 5.2 6 2.4 4.5 0z" fill="#2F80ED"/></svg>`;
 
+/**
+ * The provider's licence requires visible attribution wherever its data is
+ * shown (OpenWeather: ODbL, "Weather data © OpenWeather"). Printed with
+ * every forecast on every plan — unlike the Weather Slip mark, it can't be
+ * hidden.
+ */
+const WEATHER_CREDITS: Record<string, string> = {
+  openweather: "OpenWeather",
+  "open-meteo": "Open-Meteo.com",
+};
+
+export function weatherCredit(source: string): string {
+  return `© ${WEATHER_CREDITS[source] ?? source}`;
+}
+
+function creditHtml(t: SlipStrings, w: Extract<SlipWeather, { status: "ok" }>): string {
+  return `<p class="credit">${escapeHtml(t.weatherData)} ${escapeHtml(weatherCredit(w.source))}</p>`;
+}
+
 /** Forecast as cards (Classic, Detailed). */
 function weatherCards(
   w: SlipWeather | undefined,
@@ -742,6 +766,7 @@ function weatherCards(
         .map((n) => `<p class="muted">${escapeHtml(n)}</p>`)
         .join("")}
       ${d.showAsOf ? `<p class="asof">${escapeHtml(t.forecastAsOf)} ${escapeHtml(asOfText(w.asOf, timeZone, loc))}</p>` : ""}
+      ${creditHtml(t, w)}
     </section>`;
 }
 
@@ -794,6 +819,7 @@ function weatherTable(
         .map((n) => `<p class="muted">${escapeHtml(n)}</p>`)
         .join("")}
       ${d.showAsOf ? `<p class="asof">${escapeHtml(t.forecastAsOf)} ${escapeHtml(asOfText(w.asOf, timeZone, loc))}</p>` : ""}
+      ${creditHtml(t, w)}
     </section>`;
 }
 
@@ -1195,6 +1221,7 @@ const BASE_STYLES = `
   table.fc tr.key td { font-weight: 700; border-bottom: 1px solid var(--accent, #111); }
   table.fc .num { text-align: right; }
   .asof { color: #888; font-size: 10px; }
+  .credit { color: #888; font-size: 9px; margin-top: 2px; }
   table.items { width: 100%; border-collapse: collapse; }
   table.items th { text-align: left; font-size: 11px; border-bottom: 1px solid #bbb; padding: 4px 6px; }
   table.items td { border-bottom: 1px solid #eee; padding: 6px; vertical-align: middle; }
@@ -1251,6 +1278,7 @@ const LABEL_STYLES = `
   h3 { font-size: 10px; margin: 6px 0 3px; }
   table.fc th, table.fc td { padding: 1px 3px; font-size: 9px; }
   .asof { font-size: 8px; }
+  .credit { font-size: 7px; }
   ul.lines { list-style: none; }
   ul.lines li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted #999; padding: 2px 0; }
   .note { margin-top: 6px; padding: 4px; background: none; border: 1px solid #111; }

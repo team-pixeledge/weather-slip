@@ -141,6 +141,7 @@ export async function weatherForSlips(
           delivery,
           ...slipForecast(forecast, destinationToday(forecast, now), provider.horizonDays),
           asOf: now.toISOString(),
+          source: provider.id,
         };
         out.set(id, w);
         fresh.push([id, w]);

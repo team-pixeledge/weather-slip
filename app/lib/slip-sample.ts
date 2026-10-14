@@ -115,6 +115,7 @@ export function sampleSlipData(today: string, shopName: string) {
     })),
     horizonEnd: addDays(today, 4),
     asOf: `${today}T09:30:00Z`,
+    source: "openweather",
   };
   // Ships from the store (Austin) to the customer (Denver).
   const distance = new Map<string, SlipDistance[]>([
