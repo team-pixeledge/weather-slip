@@ -330,9 +330,12 @@ function Checklist({ c }: { c: ChecklistState }) {
       plan: c.flowAutomation ? undefined : "Pro",
       body: (
         <>
-          In Shopify Flow: trigger <em>Order paid</em> or{" "}
-          <em>Order fulfilled</em> → action <em>Save weather on order</em>{" "}
-          (Weather Slip).
+          In{" "}
+          <s-link href="shopify://admin/apps/flow" target="_blank">
+            Shopify Flow
+          </s-link>
+          : trigger <em>Order paid</em> or <em>Order fulfilled</em> → action{" "}
+          <em>Save weather on order</em> (Weather Slip) → Turn on.
         </>
       ),
     },
