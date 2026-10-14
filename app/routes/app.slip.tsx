@@ -24,6 +24,7 @@ import {
   sanitizeDesign,
   SLIP_TEMPLATES,
   TEXT_MAX,
+  WATERMARK_PRESETS,
   type FontKey,
   type LogoSource,
   type PaperSize,
@@ -65,8 +66,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       distance: plan.distance,
       removeBranding: plan.removeBranding,
       customTemplateRequest: plan.customTemplateRequest,
+      watermark: plan.watermark,
     },
     upsell: {
+      watermark: plansWith((p) => p.watermark !== "none"),
+      watermarkCustom: plansWith((p) => p.watermark === "custom" || p.watermark === "logo"),
+      watermarkLogo: plansWith((p) => p.watermark === "logo"),
       languages: plansWith((p) => p.languages),
       distance: plansWith((p) => p.distance),
       removeBranding: plansWith((p) => p.removeBranding),
@@ -854,6 +859,119 @@ export default function PackingSlip() {
                   </s-text>
                 )}
               </s-stack>
+            </s-section>
+
+            <s-section heading="Watermark">
+              {plan.watermark === "none" ? (
+                <s-paragraph>
+                  Print a faint word (PAID, FRAGILE, GIFT…) or your logo
+                  behind every slip — on the {loaded.upsell.watermark} plans.{" "}
+                  <s-link href="/app/plans">See plans</s-link>
+                </s-paragraph>
+              ) : (
+                <s-stack direction="block" gap="base">
+                  <s-select
+                    label="Watermark"
+                    value={d.watermark}
+                    onChange={(e) =>
+                      setD({
+                        watermark: e.currentTarget.value as SlipDesign["watermark"],
+                      })
+                    }
+                  >
+                    <s-option value="none">None</s-option>
+                    <s-option value="text">Text</s-option>
+                    <s-option value="logo" disabled={plan.watermark !== "logo"}>
+                      {plan.watermark === "logo"
+                        ? "My logo"
+                        : `My logo — ${loaded.upsell.watermarkLogo} plan`}
+                    </s-option>
+                  </s-select>
+                  {d.watermark === "text" &&
+                    (plan.watermark === "preset" ? (
+                      <s-select
+                        label="Text"
+                        details={`Your own wording is on the ${loaded.upsell.watermarkCustom} plans.`}
+                        value={d.watermarkText ?? ""}
+                        onChange={(e) =>
+                          setD({ watermarkText: e.currentTarget.value || null })
+                        }
+                      >
+                        <s-option value="">Choose…</s-option>
+                        {WATERMARK_PRESETS.map((w) => (
+                          <s-option key={w} value={w}>
+                            {w}
+                          </s-option>
+                        ))}
+                      </s-select>
+                    ) : (
+                      <>
+                        <s-text-field
+                          label="Text"
+                          placeholder="e.g. PAID, FRAGILE, Handmade with love"
+                          maxLength={TEXT_MAX.watermarkText}
+                          value={d.watermarkText ?? ""}
+                          onInput={(e) =>
+                            setD({ watermarkText: e.currentTarget.value || null })
+                          }
+                        />
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {WATERMARK_PRESETS.map((w) => (
+                            <s-button key={w} variant="tertiary" onClick={() => setD({ watermarkText: w })}>
+                              {w}
+                            </s-button>
+                          ))}
+                        </div>
+                      </>
+                    ))}
+                  {d.watermark === "logo" && (
+                    <s-text color="subdued">
+                      Uses the logo chosen under Logo &amp; header
+                      {d.logoSource === "none" ? " — pick one there first." : "."}
+                    </s-text>
+                  )}
+                  <s-select
+                    label="Size"
+                    value={d.watermarkSize}
+                    disabled={d.watermark === "none"}
+                    onChange={(e) =>
+                      setD({ watermarkSize: e.currentTarget.value as SlipDesign["watermarkSize"] })
+                    }
+                  >
+                    <s-option value="S">Small</s-option>
+                    <s-option value="M">Medium</s-option>
+                    <s-option value="L">Large</s-option>
+                  </s-select>
+                  <s-select
+                    label="Angle"
+                    value={d.watermarkAngle}
+                    disabled={d.watermark === "none"}
+                    onChange={(e) =>
+                      setD({
+                        watermarkAngle: e.currentTarget.value === "flat" ? "flat" : "diagonal",
+                      })
+                    }
+                  >
+                    <s-option value="diagonal">Diagonal</s-option>
+                    <s-option value="flat">Straight</s-option>
+                  </s-select>
+                  <s-select
+                    label="Strength"
+                    details="Light keeps the slip easy to read and uses almost no ink. It prints in your accent colour."
+                    value={d.watermarkOpacity}
+                    disabled={d.watermark === "none"}
+                    onChange={(e) =>
+                      setD({
+                        watermarkOpacity: e.currentTarget.value as SlipDesign["watermarkOpacity"],
+                      })
+                    }
+                  >
+                    <s-option value="light">Light</s-option>
+                    <s-option value="medium">Medium</s-option>
+                    <s-option value="strong">Strong</s-option>
+                  </s-select>
+                </s-stack>
+              )}
             </s-section>
 
             <s-section heading="Style">

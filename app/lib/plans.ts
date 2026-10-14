@@ -3,7 +3,7 @@
 // Plans count prints with weather — every order on every print, reprints
 // included (user decision 2026-10-14) — not API calls.
 import type { OrderView } from "./order-views";
-import type { SlipOptions, SlipTemplate } from "./slip";
+import { WATERMARK_PRESETS, type SlipOptions, type SlipTemplate } from "./slip";
 
 export type PlanId = "FREE" | "STARTER" | "PRO" | "BUSINESS";
 export type BillingInterval = "MONTHLY" | "ANNUAL";
@@ -34,6 +34,8 @@ export interface PlanLimits {
   customTemplateRequest: boolean;
   /** May hide the "Weather Slip" mark printed at the foot of each page. */
   removeBranding: boolean;
+  /** Merchant watermark: none / preset words / any text / logo or text. */
+  watermark: "none" | "preset" | "custom" | "logo";
   /** One-line pitch for the Plans page. */
   tagline: string;
   /** Badge on the plan card (e.g. "Most popular"). */
@@ -59,6 +61,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     flowAutomation: false,
     customTemplateRequest: false,
     removeBranding: false,
+    watermark: "none",
     tagline: "For trying it out and small shops.",
   },
   STARTER: {
@@ -77,6 +80,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     flowAutomation: false,
     customTemplateRequest: false,
     removeBranding: false,
+    watermark: "preset",
     tagline: "For growing shops shipping every day.",
   },
   PRO: {
@@ -95,6 +99,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     flowAutomation: true,
     customTemplateRequest: false,
     removeBranding: false,
+    watermark: "custom",
     tagline: "For busy shops shipping in volume.",
     highlight: "Most popular",
   },
@@ -114,6 +119,7 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     flowAutomation: true,
     customTemplateRequest: true,
     removeBranding: true,
+    watermark: "logo",
     tagline: "For high-volume brands shipping thousands of orders.",
   },
 };
@@ -173,8 +179,21 @@ export function planSlipOptions(o: SlipOptions, plan: PlanId): SlipOptions {
       language: p.languages ? o.design.language : "en",
       showDistance: p.distance && o.design.showDistance,
       showBranding: p.removeBranding ? o.design.showBranding : true,
+      ...planWatermark(o, p.watermark),
     },
   };
+}
+
+/** The watermark a plan may print: anything beyond its tier is dropped. */
+function planWatermark(o: SlipOptions, tier: PlanLimits["watermark"]): Pick<SlipOptions["design"], "watermark"> {
+  const d = o.design;
+  if (d.watermark === "logo") return { watermark: tier === "logo" ? "logo" : "none" };
+  if (d.watermark === "text") {
+    const preset = (WATERMARK_PRESETS as readonly string[]).includes((d.watermarkText ?? "").trim().toUpperCase());
+    const ok = tier === "custom" || tier === "logo" || (tier === "preset" && preset);
+    return { watermark: ok ? "text" : "none" };
+  }
+  return { watermark: "none" };
 }
 
 /** A view this plan may open; anything else falls back to its default. */
@@ -215,6 +234,9 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
     { text: "Shopify Flow: save weather when paid or fulfilled", included: p.flowAutomation },
     { text: "Custom template built for your brand", included: p.customTemplateRequest },
     { text: "Remove the Weather Slip mark from prints", included: p.removeBranding },
+    { text: "Watermark: PAID, FRAGILE, GIFT…", included: p.watermark !== "none" },
+    { text: "Watermark with your own text", included: p.watermark === "custom" || p.watermark === "logo" },
+    { text: "Watermark with your logo", included: p.watermark === "logo" },
   ];
 }
 

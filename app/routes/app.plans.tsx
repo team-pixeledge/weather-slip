@@ -197,7 +197,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "What does each plan include?",
-    "Free: 30 prints a month, the Classic template, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list and Order Printer setup. Pro: 2,000 prints, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer and Shopify Flow. Business: 5,000 prints, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, and removes the Weather Slip mark.",
+    "Free: 30 prints a month, the Classic template, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list, Order Printer setup and a watermark word (PAID, FRAGILE, GIFT…). Pro: 2,000 prints, adds the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer, Shopify Flow and a watermark with your own text. Business: 5,000 prints, adds the 4×6 / 4×4 shipping label, a custom template built for your brand, a logo watermark, and removes the Weather Slip mark.",
   ],
   [
     "Which orders are listed?",
@@ -210,6 +210,10 @@ const FAQ: [string, string][] = [
   [
     "Can I print fewer forecast days, or a code warehouses can scan?",
     "Yes. In Packing slip → Weather choose “Dispatch to delivery only” to show just the days the parcel travels. In Logo & header choose a QR code or a Code 128 barcode of the order number.",
+  ],
+  [
+    "Can I add a watermark?",
+    "Yes, in Packing slip → Watermark: a faint word or logo behind every slip, in your accent colour, with size, angle and strength. Starter picks a word (PAID, FRAGILE, GIFT, HANDLE WITH CARE…), Pro and Business type their own, and Business can use its logo.",
   ],
   [
     "Can slips print in another language? (Pro and Business)",

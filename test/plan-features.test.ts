@@ -199,3 +199,33 @@ describe("Flow action payload", async () => {
     expect(flowOrderId({ properties: { order_id: "1; drop" } })).toBeNull();
   });
 });
+
+describe("watermark", () => {
+  const wm = (design: Partial<SlipDesign>): SlipOptions => ({
+    ...DEFAULT_SLIP_OPTIONS,
+    design: { ...DEFAULT_SLIP_OPTIONS.design, ...design },
+  });
+  const logo = "https://cdn.shopify.com/s/files/logo.png";
+
+  it("is tiered: Free none, Starter presets, Pro any text, Business logo", () => {
+    const paid = wm({ watermark: "text", watermarkText: "PAID" });
+    const custom = wm({ watermark: "text", watermarkText: "Handmade with love" });
+    const logoWm = wm({ watermark: "logo", logoUrl: logo });
+    expect(planSlipOptions(paid, "FREE").design.watermark).toBe("none");
+    expect(planSlipOptions(paid, "STARTER").design.watermark).toBe("text");
+    expect(planSlipOptions(custom, "STARTER").design.watermark).toBe("none");
+    expect(planSlipOptions(custom, "PRO").design.watermark).toBe("text");
+    expect(planSlipOptions(logoWm, "PRO").design.watermark).toBe("none");
+    expect(planSlipOptions(logoWm, "BUSINESS").design.watermark).toBe("logo");
+  });
+
+  it("renders text or logo behind the page, escaped, no inline styles", () => {
+    const text = render({ watermark: "text", watermarkText: "<b>PAID</b>" });
+    expect(text).toContain('<div class="wm" aria-hidden="true"><span>&lt;b&gt;PAID&lt;/b&gt;</span></div>');
+    const img = render({ watermark: "logo", logoUrl: logo });
+    expect(img).toContain(`class="wm-logo" src="${logo}"`);
+    expect(render({ watermark: "logo", logoUrl: null })).not.toContain('class="wm"');
+    expect(render({ watermark: "text", watermarkText: "PAID", watermarkAngle: "flat" })).toContain("--wm-rot: 0deg");
+    expect(text).not.toMatch(/<div class="wm"[^>]*style=/);
+  });
+});

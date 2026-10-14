@@ -244,6 +244,11 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
   (`/print/admin` 403s on Free), customer list, Order Printer setup.
 - Pro+: slip language, distance, Shopify Flow action. Business: custom
   template requests, hiding the Weather Slip mark.
+- **Watermark** (user decision 2026-10-14, merchant's own, tiered): Free
+  none, Starter `WATERMARK_PRESETS` words only, Pro any text, Business logo
+  (the slip's resolved logo) or text — `planWatermark`. Rendered as `.wm`
+  at z-index -1 inside each `.page` (isolated stacking context), sizes and
+  opacity via CSS vars, accent colour.
 - **Settings are stored as chosen and clamped at every render** by
   `planSlipOptions` (print route, Orders default, slip preview), so a
   downgrade + re-upgrade loses nothing. Only the saved default template is

@@ -353,6 +353,12 @@ export interface SlipDesign {
   showTip: boolean;
   /** Scannable order number in the header, for warehouses. */
   orderCode: OrderCodeKind;
+  /** Faint watermark behind each slip (plan-tiered — see planSlipOptions). */
+  watermark: "none" | "text" | "logo";
+  watermarkText: string | null;
+  watermarkSize: SizeKey;
+  watermarkAngle: "diagonal" | "flat";
+  watermarkOpacity: "light" | "medium" | "strong";
 }
 
 export const DEFAULT_SLIP_DESIGN: SlipDesign = {
@@ -405,9 +411,26 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   forecastRange: "all",
   showTip: true,
   orderCode: "none",
+  watermark: "none",
+  watermarkText: null,
+  watermarkSize: "M",
+  watermarkAngle: "diagonal",
+  watermarkOpacity: "light",
 };
 
+/** Starter's watermark choices; Pro and Business may type their own. */
+export const WATERMARK_PRESETS = [
+  "PAID",
+  "FRAGILE",
+  "GIFT",
+  "HANDLE WITH CARE",
+  "THANK YOU",
+  "SAMPLE",
+  "COPY",
+] as const;
+
 export const TEXT_MAX = {
+  watermarkText: 40,
   title: 60,
   headerNote: 200,
   footerExtra: 600,
@@ -530,6 +553,11 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     forecastRange: pick("forecastRange", ["all", "trip"] as const),
     showTip: bool("showTip"),
     orderCode: pick("orderCode", ["none", "qr", "barcode"] as const),
+    watermark: pick("watermark", ["none", "text", "logo"] as const),
+    watermarkText: text("watermarkText"),
+    watermarkSize: pick("watermarkSize", ["S", "M", "L"] as const),
+    watermarkAngle: pick("watermarkAngle", ["diagonal", "flat"] as const),
+    watermarkOpacity: pick("watermarkOpacity", ["light", "medium", "strong"] as const),
   };
 }
 
@@ -1063,6 +1091,21 @@ function distanceHtml(list: SlipDistance[] | undefined, d: SlipDesign): string {
   return `<p class="distance"><strong>${escapeHtml(t.distance)}:</strong> ${body}${ok.length ? ` <span class="muted">(${escapeHtml(t.straightLine)})</span>` : ""}</p>`;
 }
 
+/**
+ * Faint text or logo behind the slip. Sits in the page's own stacking
+ * context (z-index -1 over the white page), so text stays on top. Logo =
+ * the slip's resolved logo (Shopify CDN only, like the header logo).
+ */
+function watermarkHtml(d: SlipDesign): string {
+  if (d.watermark === "logo" && d.logoUrl) {
+    return `<div class="wm" aria-hidden="true"><img class="wm-logo" src="${escapeHtml(d.logoUrl)}" alt=""></div>`;
+  }
+  if (d.watermark === "text" && d.watermarkText?.trim()) {
+    return `<div class="wm" aria-hidden="true"><span>${escapeHtml(d.watermarkText.trim())}</span></div>`;
+  }
+  return "";
+}
+
 interface PageCtx {
   shop: PrintShop;
   weather: SlipWeather | undefined;
@@ -1104,6 +1147,7 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
         : `<header><h1>${title}</h1>${meta}</header>`;
   return `
     <article class="page">
+      ${watermarkHtml(d)}
       ${header}
       ${headerNote(d)}
       <div class="addresses">
@@ -1137,6 +1181,7 @@ function labelPage(order: PrintOrder, c: PageCtx): string {
   const logo = logoHtml(d);
   return `
     <article class="page">
+      ${watermarkHtml(d)}
       <header>
         <span class="brand">${logo}${d.showStoreName ? `<strong>${escapeHtml(c.shop.name)}</strong>` : ""}</span>
         <span>${d.orderCode !== "none" ? `<span class="ocode-wrap">${orderCodeSvg(d.orderCode, order.name)}</span>` : ""}<strong>${escapeHtml(order.name)}</strong>${d.showOrderDate ? ` · ${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}` : ""}</span>
@@ -1165,7 +1210,15 @@ const BASE_STYLES = `
   .bar { position: sticky; top: 0; display: flex; gap: 12px; align-items: center; justify-content: space-between;
          padding: 10px 16px; background: #1a1a1a; color: #fff; font-size: 13px; z-index: 1; }
   .bar button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 0; background: #fff; color: #111; cursor: pointer; }
-  .page { background: #fff; width: 100%; max-width: 210mm; margin: 16px auto; padding: 14mm 12mm; }
+  .page { background: #fff; width: 100%; max-width: 210mm; margin: 16px auto; padding: 14mm 12mm;
+          position: relative; isolation: isolate; }
+  .wm { position: absolute; inset: 0; z-index: -1; display: flex; align-items: center; justify-content: center;
+        overflow: hidden; pointer-events: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .wm span { font-size: var(--wm-size, 72px); font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+             color: var(--accent, #111); opacity: var(--wm-op, .07); transform: rotate(var(--wm-rot, -30deg));
+             white-space: nowrap; }
+  .wm-logo { width: var(--wm-logo, 60%); max-height: 70%; object-fit: contain; opacity: var(--wm-op, .07);
+             transform: rotate(var(--wm-rot, -30deg)); }
   header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   header h1 { font-size: 1.85em; color: var(--accent, #111); }
   header .brand { display: flex; align-items: center; gap: 12px; }
@@ -1327,7 +1380,12 @@ function designVars(d: SlipDesign, label: boolean): string {
   const logoH = label ? Math.min(48, Math.max(16, Math.round(d.logoHeight / 2))) : d.logoHeight;
   const logoW = label ? Math.min(160, d.logoMaxWidth) : d.logoMaxWidth;
   const img = ITEM_IMG_PX[d.itemImageSize];
-  return `:root { --accent: ${d.accent}; --font: ${FONTS[d.font].css}; --fs: ${px}px; --logo-h: ${logoH}px; --logo-w: ${logoW}px; --img: ${img}px; }`;
+  // Watermark: labels are 4 in wide, so everything scales down there.
+  const wmText = { S: 48, M: 72, L: 104 }[d.watermarkSize] * (label ? 0.5 : 1);
+  const wmLogo = { S: 40, M: 60, L: 80 }[d.watermarkSize];
+  const wmOp = { light: 0.07, medium: 0.12, strong: 0.2 }[d.watermarkOpacity];
+  const wmRot = d.watermarkAngle === "flat" ? 0 : -30;
+  return `:root { --accent: ${d.accent}; --font: ${FONTS[d.font].css}; --fs: ${px}px; --logo-h: ${logoH}px; --logo-w: ${logoW}px; --img: ${img}px; --wm-size: ${wmText}px; --wm-logo: ${wmLogo}%; --wm-op: ${wmOp}; --wm-rot: ${wmRot}deg; }`;
 }
 
 function stylesFor(o: SlipOptions | null): string {
