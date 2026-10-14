@@ -181,7 +181,7 @@ const CARD = {
 const FAQ: [string, string][] = [
   [
     "What counts toward my plan?",
-    "Every slip you print with weather: each order on each print uses one from your monthly allowance — printing 20 slips uses 20, and reprinting an order uses one more. Printing the same order again within 10 minutes is free (a reload, Shopify's print preview, a second copy for the box). Orders you never print never count; saving weather with Shopify Flow doesn't count either — the print does. The weather is saved on the order, so every reprint shows exactly the same forecast.",
+    "Every slip you print with weather: each order on each print uses one from your monthly allowance — printing 20 slips uses 20, and reprinting an order uses one more. Printing the same order again within 10 minutes is free (a reload, Shopify's print preview, a second copy for the box). Orders you never print never count, and neither does the customer list; saving weather with Shopify Flow doesn't count either — the print does. The weather is saved on the order, so every reprint shows exactly the same forecast.",
   ],
   [
     "If I re-pack an order and print its slip again, is that charged?",
@@ -233,7 +233,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Can I pay yearly?",
-    "Yes — switch the plan cards to Yearly. Starter is $49, Pro $99 and Business $199 a year, about two months free. Your order allowance is the same as monthly and resets every 30 days.",
+    "Yes — switch the plan cards to Yearly. Starter is $49, Pro $99 and Business $199 a year, about two months free. Your print allowance is the same as monthly and resets every 30 days.",
   ],
   [
     "How do I cancel or go back to Free?",
@@ -245,7 +245,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Where does the weather come from, and how far ahead?",
-    "Weather data © OpenWeather (openweathermap.org), used under the Open Database License (ODbL); every slip carries that credit. The forecast is for the order's shipping city. It is fetched when the order's slip is first printed (or when Shopify Flow saves it) and saved on the order — it isn't live weather, and slips printed from the app always reprint that saved forecast. The slip shows today plus the next 4 days at the destination, with the dispatch and delivery days marked and, by default, the time the forecast was taken. If the delivery day is further out, the slip says so. The one-line weather on Shopify's own packing slip follows the saved weather too; it's updated only if the shipping address changes before the order ships or a day that was beyond the forecast range comes into range, and it's frozen once the order is fulfilled.",
+    "Weather data © OpenWeather (openweathermap.org), used under the Open Database License (ODbL); every slip carries that credit. The forecast is for the order's shipping city. It is fetched when the order's slip is first printed (or when Shopify Flow saves it) and saved on the order — it isn't live weather, and slips printed from the app always reprint that saved forecast. The slip shows today plus the next 4 days at the destination (or only dispatch to delivery, if you choose that in Packing slip → Weather), with the dispatch and delivery days marked and, by default, the time the forecast was taken. If the delivery day is further out, the slip says so. The one-line weather on Shopify's own packing slip follows the saved weather too; it's updated only if the shipping address changes before the order ships or a day that was beyond the forecast range comes into range, and it's frozen once the order is fulfilled.",
   ],
   [
     "Which printers and paper sizes work?",

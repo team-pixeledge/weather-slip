@@ -88,7 +88,7 @@ export function providerFor(): WeatherProvider {
 }
 
 /**
- * Take one unit of the shop's monthly order allowance. Atomic: two
+ * Take one unit of the shop's monthly print allowance. Atomic: two
  * concurrent orders can't both squeeze past the limit. Returns false when
  * the shop is at its limit.
  */
