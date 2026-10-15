@@ -268,6 +268,7 @@ export default function Orders() {
     window.open(u.toString(), "_blank", "noopener");
   };
   const selectedIds = [...selected.keys()];
+  const readySet = new Set(ready);
 
   // New orders appear on their own: re-run the loader every 30s while the
   // tab is visible and on the first page (later pages would shift under
@@ -332,23 +333,32 @@ export default function Orders() {
           tone="success"
           heading={`${ready.length} order${ready.length === 1 ? "" : "s"} ready to print`}
         >
-          Shopify Flow saved the weather on {ready.length === 1 ? "this order" : "these orders"}.
-          Print {ready.length === 1 ? "its slip" : "all their slips"} in one go — each order uses
-          one print from your plan.
-          {ready.length > MAX_PRINT_ORDERS && ` The first ${MAX_PRINT_ORDERS} print now; the rest stay here.`}
-          <s-button
-            slot="secondary-actions"
-            variant="primary"
-            onClick={() => openPrint("slips", ready.slice(0, MAX_PRINT_ORDERS))}
-          >
-            {`Print ${ready.length === 1 ? "it" : `${Math.min(ready.length, MAX_PRINT_ORDERS)} slips`}`}
-          </s-button>
-          <s-button
-            slot="secondary-actions"
-            onClick={() => update({ ready: readyOnly ? null : "1", after: null, before: null })}
-          >
-            {readyOnly ? "Show all orders" : "Show them"}
-          </s-button>
+          <s-stack direction="block" gap="small-300">
+            <s-paragraph>
+              Shopify Flow already fetched and saved the weather on{" "}
+              {ready.length === 1 ? "this order" : "these orders"} — printing makes no new
+              weather lookup. All that&apos;s left is sending the slips to your printer (a
+              browser can only print from a page you have open), so print them all in one go.
+              Each order uses one print from your plan.
+              {ready.length > MAX_PRINT_ORDERS && ` The first ${MAX_PRINT_ORDERS} print now; the rest stay here.`}
+            </s-paragraph>
+            {/* Plain stack, not the banner's action slot: Polaris drops a
+                primary button there, which hid the main action. */}
+            <s-stack direction="inline" gap="small-200">
+              <s-button
+                variant="primary"
+                icon="print"
+                onClick={() => openPrint("slips", ready.slice(0, MAX_PRINT_ORDERS))}
+              >
+                {`Print ${ready.length === 1 ? "slip" : `all ${Math.min(ready.length, MAX_PRINT_ORDERS)} slips`}`}
+              </s-button>
+              <s-button
+                onClick={() => update({ ready: readyOnly ? null : "1", after: null, before: null })}
+              >
+                {readyOnly ? "Show all orders" : "Show them"}
+              </s-button>
+            </s-stack>
+          </s-stack>
         </s-banner>
       )}
 
@@ -579,6 +589,10 @@ export default function Orders() {
                         {dim ? "Reprint" : "Print slip"}
                       </s-button>
                       {r.printed && <PrintedBadge id={r.id} printed={r.printed} />}
+                      {!r.printed && readySet.has(r.id) && (
+                        // Flow already saved its weather: printing is just paper.
+                        <s-badge tone="success" icon="check">Weather saved by Flow</s-badge>
+                      )}
                     </s-stack>
                   </s-table-cell>
                 </s-table-row>
