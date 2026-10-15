@@ -39,8 +39,6 @@ export interface PlanLimits {
   distance: boolean;
   /** Shopify Flow action: save an order's weather when it's paid/fulfilled. */
   flowAutomation: boolean;
-  /** Ask us to build a template around your brand. */
-  customTemplateRequest: boolean;
   /** May hide the "Weather Slip" mark printed at the foot of each page. */
   removeBranding: boolean;
   /** Merchant watermark: none / preset words / any text / logo or text. */
@@ -71,7 +69,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     languages: false,
     distance: false,
     flowAutomation: false,
-    customTemplateRequest: false,
     removeBranding: false,
     watermark: "none",
     tagline: "For trying it out and small shops.",
@@ -93,7 +90,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     languages: false,
     distance: false,
     flowAutomation: false,
-    customTemplateRequest: false,
     removeBranding: false,
     watermark: "preset",
     tagline: "For growing shops shipping every day.",
@@ -115,7 +111,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     languages: true,
     distance: true,
     flowAutomation: true,
-    customTemplateRequest: false,
     removeBranding: false,
     watermark: "custom",
     tagline: "For busy shops shipping in volume.",
@@ -138,7 +133,6 @@ export const PLANS: Record<PlanId, PlanLimits> = {
     languages: true,
     distance: true,
     flowAutomation: true,
-    customTemplateRequest: true,
     removeBranding: true,
     watermark: "logo",
     tagline: "For high-volume brands shipping thousands of orders.",
@@ -280,7 +274,6 @@ export function planFeatures(id: PlanId): { text: string; included: boolean }[] 
     { text: "Slips in 7 languages", included: p.languages },
     { text: "Distance to the customer on the slip", included: p.distance },
     { text: "Shopify Flow: save weather when paid or fulfilled", included: p.flowAutomation },
-    { text: "Custom template built for your brand", included: p.customTemplateRequest },
     { text: "Remove the Weather Slip mark from prints", included: p.removeBranding },
     { text: "Watermark: PAID, FRAGILE, GIFT…", included: p.watermark !== "none" },
     { text: "Watermark with your own text", included: p.watermark === "custom" || p.watermark === "logo" },

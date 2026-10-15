@@ -93,7 +93,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       break;
     }
     case "SHOP_REDACT": {
-      // Cascades to snapshots, jobs, counted orders and template requests.
+      // Cascades to snapshots, jobs, counted orders and printed orders.
       await prisma.shop.deleteMany({ where: { shop } });
       await prisma.session.deleteMany({ where: { shop } });
       break;

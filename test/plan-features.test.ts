@@ -11,7 +11,6 @@ import {
 import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, weatherTip, weatherWarnings, type SlipDesign, type SlipOptions } from "../app/lib/slip";
 import { conditionLabel, slipStrings } from "../app/lib/slip-i18n";
 import { barcodeSvg, code128Values, CODE128_PATTERNS, qrSvg } from "../app/lib/order-code";
-import { parseTemplateRequest } from "../app/lib/template-request";
 import { sampleSlipData } from "../app/lib/slip-sample";
 
 const { shop, order, weather } = sampleSlipData("2026-10-12", "Green Leaf Co");
@@ -168,25 +167,6 @@ describe("order codes", () => {
     const svg = qrSvg("#1042");
     expect(svg).toMatch(/<path d="M/);
     expect(svg).not.toContain("style=");
-  });
-});
-
-describe("template requests", () => {
-  it("validates the form", () => {
-    expect(parseTemplateRequest({ description: "short", contactEmail: "a@b.co" }).ok).toBe(false);
-    expect(
-      parseTemplateRequest({ description: "x".repeat(30), contactEmail: "a@b.co", referenceUrl: "javascript:alert(1)" }).ok,
-    ).toBe(false);
-    expect(parseTemplateRequest({ description: "x".repeat(30), contactEmail: "nope" }).ok).toBe(false);
-    const ok = parseTemplateRequest({
-      description: "  A 4x6 label with our gift note on the back  ",
-      contactEmail: "ops@shop.example",
-      referenceUrl: "",
-    });
-    expect(ok).toEqual({
-      ok: true,
-      data: { description: "A 4x6 label with our gift note on the back", referenceUrl: null, contactEmail: "ops@shop.example" },
-    });
   });
 });
 

@@ -36,26 +36,15 @@ import { DISTANCE_UNITS, type DistanceUnit } from "../lib/distance";
 import { listLocations } from "../lib/distance.server";
 import { PLANS, planSlipOptions, plansWith, templatePlan } from "../lib/plans";
 import { SLIP_LANGUAGES, type SlipLanguage } from "../lib/slip-i18n";
-import {
-  recentTemplateRequests,
-  shopContactEmail,
-  submitTemplateRequest,
-} from "../lib/template-request.server";
-import {
-  TEMPLATE_REQUEST_LIMITS,
-  TEMPLATE_REQUEST_STATUS_LABEL,
-} from "../lib/template-request";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
   // Fresh on every visit, so a logo changed in Settings → Brand shows here.
   const plan = PLANS[shop.plan];
-  const [brandLogoUrl, locations, requests, contactEmail] = await Promise.all([
+  const [brandLogoUrl, locations] = await Promise.all([
     refreshBrandLogo(admin, shop),
     listLocations(admin),
-    recentTemplateRequests(session.shop),
-    plan.customTemplateRequest ? shopContactEmail(admin) : Promise.resolve(null),
   ]);
   return {
     planId: shop.plan,
@@ -66,7 +55,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       distance: plan.distance,
       dispatchForecast: plan.dispatchForecast,
       removeBranding: plan.removeBranding,
-      customTemplateRequest: plan.customTemplateRequest,
       watermark: plan.watermark,
     },
     upsell: {
@@ -77,10 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       dispatch: plansWith((p) => p.dispatchForecast),
       distance: plansWith((p) => p.distance),
       removeBranding: plansWith((p) => p.removeBranding),
-      customTemplateRequest: plansWith((p) => p.customTemplateRequest),
     },
-    requests: requests.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
-    contactEmail,
     locations,
     options: slipOptions(shop),
     brandLogoUrl,
@@ -90,19 +75,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-type ActionResult =
-  | { ok: true; kind: "saved" | "requested" }
-  | { ok: false; kind: "requested"; error: string };
+type ActionResult = { ok: true; kind: "saved" };
 
 export const action = async ({ request }: ActionFunctionArgs): Promise<ActionResult> => {
   const { session } = await authenticate.admin(request);
   const body = (await request.json()) as Record<string, unknown>;
   const shop = await ensureShop(session.shop);
-
-  if (body.intent === "template-request") {
-    const r = await submitTemplateRequest(session.shop, shop.plan, body);
-    return r.ok ? { ok: true, kind: "requested" } : { ok: false, kind: "requested", error: r.error };
-  }
 
   // A template the plan doesn't include can't become the default. Other
   // locked settings are stored as chosen and clamped at print
@@ -153,22 +131,6 @@ export default function PackingSlip() {
   }, [fetcher.data, shopify]);
 
   const plan = loaded.plan;
-  const requestFetcher = useFetcher<typeof action>();
-  const [req, setReq] = useState({
-    description: "",
-    referenceUrl: "",
-    contactEmail: loaded.contactEmail ?? "",
-  });
-  // Clear the form once per successful send (adjusting state during
-  // render, not in an effect); keep the text if the send failed.
-  const [handledRequest, setHandledRequest] = useState(requestFetcher.data);
-  if (requestFetcher.data !== handledRequest) {
-    setHandledRequest(requestFetcher.data);
-    if (requestFetcher.data?.ok) setReq((r) => ({ ...r, description: "", referenceUrl: "" }));
-  }
-  useEffect(() => {
-    if (requestFetcher.data?.ok) shopify.toast.show("Request sent — we'll reply by email");
-  }, [requestFetcher.data, shopify]);
 
   // The preview uses what will actually be saved (e.g. a non-Shopify logo
   // link is dropped), so it never shows something the print won't.
@@ -304,75 +266,6 @@ export default function PackingSlip() {
           </s-paragraph>
         </s-section>
 
-        <s-section heading="Custom template">
-          {plan.customTemplateRequest ? (
-            <s-stack direction="block" gap="base">
-              <s-paragraph>
-                Need a layout none of these templates fit — a branded gift
-                slip, a returns form, a label for your courier? Describe it
-                and we&apos;ll build it for your store and reply by email.
-              </s-paragraph>
-              <s-text-area
-                label="What should the template look like?"
-                rows={4}
-                maxLength={TEMPLATE_REQUEST_LIMITS.descriptionMax}
-                value={req.description}
-                onInput={(e) => setReq({ ...req, description: e.currentTarget.value })}
-              />
-              <s-text-field
-                label="Reference link (optional)"
-                details="A sample PDF or image, e.g. a Shopify Files or Google Drive link."
-                placeholder="https://…"
-                value={req.referenceUrl}
-                onInput={(e) => setReq({ ...req, referenceUrl: e.currentTarget.value })}
-              />
-              <s-email-field
-                label="Reply to"
-                value={req.contactEmail}
-                onInput={(e) => setReq({ ...req, contactEmail: e.currentTarget.value })}
-              />
-              {requestFetcher.data && !requestFetcher.data.ok && (
-                <s-banner tone="critical">{requestFetcher.data.error}</s-banner>
-              )}
-              <div>
-                <s-button
-                  onClick={() =>
-                    requestFetcher.submit(
-                      { intent: "template-request", ...req },
-                      { method: "POST", encType: "application/json" },
-                    )
-                  }
-                  disabled={req.description.trim().length < TEMPLATE_REQUEST_LIMITS.descriptionMin}
-                  {...(requestFetcher.state !== "idle" ? { loading: true } : {})}
-                >
-                  Send request
-                </s-button>
-              </div>
-              {loaded.requests.length > 0 && (
-                <s-stack direction="block" gap="small-200">
-                  <s-text type="strong">Your requests</s-text>
-                  {loaded.requests.map((r) => (
-                    <s-stack key={r.id} direction="inline" gap="small-200" alignItems="center">
-                      <s-badge tone={r.status === "DONE" ? "success" : r.status === "DECLINED" ? "critical" : "info"}>
-                        {TEMPLATE_REQUEST_STATUS_LABEL[r.status] ?? r.status}
-                      </s-badge>
-                      <s-text color="subdued">
-                        {new Date(r.createdAt).toLocaleDateString()} —{" "}
-                        {r.description.length > 80 ? `${r.description.slice(0, 79)}…` : r.description}
-                      </s-text>
-                    </s-stack>
-                  ))}
-                </s-stack>
-              )}
-            </s-stack>
-          ) : (
-            <s-paragraph>
-              Want a template built around your brand? On the{" "}
-              {loaded.upsell.customTemplateRequest} plan we design one for
-              you. <s-link href="/app/plans">See plans</s-link>
-            </s-paragraph>
-          )}
-        </s-section>
 
         {/* Settings on the left, live preview on the right (sticky). */}
         <div
