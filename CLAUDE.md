@@ -184,8 +184,14 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   "n% chance of rain" with a drop icon. `forecastRange: "trip"` shows
   dispatch→delivery only. Minimal is ink-saving: hairlines, no fills.
 - No product image anywhere → the image column is dropped (no "No image").
-- **Order code**: `orderCode` none/qr/barcode — `order-code.ts`, QR via
-  `qrcode-generator`, Code 128-B hand-written (table + checksum tested).
+- **Order code**: `orderCode` none/qr/qr_number/barcode — `order-code.ts`,
+  QR via `qrcode-generator`, Code 128-B hand-written (table + checksum
+  tested). `qr` encodes the order's `statusPageUrl` (customer's order
+  status / thank-you page, works without login — user decision 2026-10-15)
+  at ECC level L, printed 96px (72px on labels) with a translated "Scan to
+  see your order" caption; falls back to the order number if the URL is
+  missing. `qr_number`/`barcode` = order number for warehouse scanners.
+  Decoding verified with OpenCV.
 - Prices come from the order (currentSubtotal/Tax/Total, shipping); they
   aren't protected customer data.
 

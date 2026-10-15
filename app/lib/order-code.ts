@@ -3,11 +3,18 @@
 // attributes — sizes come from CSS classes). Pure: the preview uses it too.
 import makeQr from "qrcode-generator";
 
-export type OrderCodeKind = "none" | "qr" | "barcode";
+/**
+ * "qr" opens the customer's order status page (what they ordered, tracking)
+ * — user decision 2026-10-15; "qr_number" / "barcode" carry the order
+ * number for warehouse scanners.
+ */
+export type OrderCodeKind = "none" | "qr" | "qr_number" | "barcode";
 
 /** QR code for `text` as one SVG path (dark modules), 4-module quiet zone. */
 export function qrSvg(text: string): string {
-  const qr = makeQr(0, "M");
+  // A link is long: level L keeps its modules big enough to scan off paper.
+  const link = /^https:\/\//.test(text);
+  const qr = makeQr(0, link ? "L" : "M");
   qr.addData(text, "Byte");
   qr.make();
   const n = qr.getModuleCount();
@@ -19,7 +26,7 @@ export function qrSvg(text: string): string {
     }
   }
   const size = n + q * 2;
-  return `<svg class="ocode qr" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img" aria-label="QR code ${escapeAttr(text)}"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  return `<svg class="ocode qr${link ? " link" : ""}" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img" aria-label="QR code ${escapeAttr(text)}"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
 }
 
 // Code 128 bar/space widths for values 0–105, then STOP (106).
@@ -67,8 +74,10 @@ export function barcodeSvg(text: string): string {
 }
 
 /** The chosen code for an order number ("" for none). */
-export function orderCodeSvg(kind: OrderCodeKind, orderName: string): string {
-  if (kind === "qr") return qrSvg(orderName);
+export function orderCodeSvg(kind: OrderCodeKind, orderName: string, statusPageUrl?: string | null): string {
+  // Only Shopify's own https link; otherwise fall back to the order number.
+  if (kind === "qr") return qrSvg(statusPageUrl && /^https:\/\//.test(statusPageUrl) ? statusPageUrl : orderName);
+  if (kind === "qr_number") return qrSvg(orderName);
   if (kind === "barcode") return barcodeSvg(orderName);
   return "";
 }

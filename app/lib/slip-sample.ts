@@ -32,6 +32,8 @@ export function sampleSlipData(
   const order: PrintOrder = {
     id: "gid://shopify/Order/1",
     name: "#1042",
+    // Same shape as Shopify's order status link (sample, goes nowhere).
+    statusPageUrl: "https://your-store.example/12345678/orders/0123456789abcdef0123456789abcdef/authenticate?key=0123456789abcdef0123456789abcdef",
     createdAt: `${today}T09:30:00Z`,
     note: "Please leave the parcel in the shade.",
     phone: null,

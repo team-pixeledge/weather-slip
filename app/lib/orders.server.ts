@@ -235,6 +235,7 @@ const PRINT_QUERY = `#graphql
           name company address1 address2 city province zip country phone
         }
         fulfillments(first: 5) { createdAt estimatedDeliveryAt }
+        statusPageUrl
         savedForecast: metafield(namespace: "weather_slip", key: "forecast") { value }
         customAttributes { key value }
         currencyCode
@@ -307,6 +308,8 @@ interface Money {
 export interface PrintOrder {
   id: string;
   name: string;
+  /** The customer's order status page ("thank you" page); the slip's QR opens it. */
+  statusPageUrl?: string | null;
   createdAt: string;
   note: string | null;
   phone: string | null;

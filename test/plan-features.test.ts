@@ -137,7 +137,16 @@ describe("slip layout options", () => {
     expect(render({}, { template: "MINIMAL" })).toContain(".warn { background: none !important; }");
   });
   it("prints a QR code or barcode of the order number when chosen", () => {
-    expect(render({ orderCode: "qr" })).toContain('class="ocode qr"');
+    // QR opens the customer's order status page, with a caption.
+    const qr = render({ orderCode: "qr" });
+    expect(qr).toContain('class="ocode qr link"');
+    expect(qr).toContain('aria-label="QR code https://your-store.example/12345678/orders/');
+    expect(qr).toContain("Scan to see your order");
+    // Warehouse QR: just the order number, no caption.
+    const num = render({ orderCode: "qr_number" });
+    expect(num).toContain('class="ocode qr"');
+    expect(num).toContain('aria-label="QR code #1042"');
+    expect(num).not.toContain("Scan to see your order");
     expect(render({ orderCode: "barcode" })).toContain('class="ocode bc"');
     expect(render()).not.toContain('class="ocode');
   });

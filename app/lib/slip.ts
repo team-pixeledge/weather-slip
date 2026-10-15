@@ -564,7 +564,7 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     showDispatch: bool("showDispatch"),
     maxDaysAhead: clampInt(r.maxDaysAhead, 0, 16, d.maxDaysAhead),
     showTip: bool("showTip"),
-    orderCode: pick("orderCode", ["none", "qr", "barcode"] as const),
+    orderCode: pick("orderCode", ["none", "qr", "qr_number", "barcode"] as const),
     watermark: pick("watermark", ["none", "text", "logo"] as const),
     watermarkText: text("watermarkText"),
     watermarkSize: pick("watermarkSize", ["S", "M", "L"] as const),
@@ -1174,7 +1174,7 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
   const meta = `
         <div class="meta">
           ${d.logoPosition === "right" ? logo : ""}
-          ${d.orderCode !== "none" ? `<div class="ocode-wrap">${orderCodeSvg(d.orderCode, order.name)}</div>` : ""}
+          ${orderCodeHtml(d, order, t, "div")}
           <p><strong>${escapeHtml(t.order)} ${escapeHtml(order.name)}</strong></p>
           ${d.showOrderDate ? `<p>${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}</p>` : ""}
           ${d.showShippingMethod && order.shippingLine ? `<p>${escapeHtml(order.shippingLine.title)}</p>` : ""}
@@ -1207,6 +1207,19 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
     </article>`;
 }
 
+/**
+ * The scannable code in the header. A QR that opens the customer's order
+ * status page gets a one-line caption, so the recipient knows to scan it.
+ */
+function orderCodeHtml(d: SlipDesign, order: PrintOrder, t: SlipStrings, tag: "div" | "span"): string {
+  if (d.orderCode === "none") return "";
+  const svg = orderCodeSvg(d.orderCode, order.name, order.statusPageUrl);
+  if (!svg) return "";
+  const link = svg.includes('class="ocode qr link"');
+  const cap = link ? `<span class="ocode-cap">${escapeHtml(t.scanOrder)}</span>` : "";
+  return `<${tag} class="ocode-wrap">${svg}${cap}</${tag}>`;
+}
+
 /** 4×6 in thermal label. */
 function labelPage(order: PrintOrder, c: PageCtx): string {
   const items = itemsToShip(order, c.o.design)
@@ -1224,7 +1237,7 @@ function labelPage(order: PrintOrder, c: PageCtx): string {
       ${watermarkHtml(d)}
       <header>
         <span class="brand">${logo}${d.showStoreName ? `<strong>${escapeHtml(c.shop.name)}</strong>` : ""}</span>
-        <span>${d.orderCode !== "none" ? `<span class="ocode-wrap">${orderCodeSvg(d.orderCode, order.name)}</span>` : ""}<strong>${escapeHtml(order.name)}</strong>${d.showOrderDate ? ` · ${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}` : ""}</span>
+        <span>${orderCodeHtml(d, order, t, "span")}<strong>${escapeHtml(order.name)}</strong>${d.showOrderDate ? ` · ${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}` : ""}</span>
       </header>
       ${headerNote(d)}
       <div class="shipto">
@@ -1305,8 +1318,11 @@ const BASE_STYLES = `
   .tip { display: flex; align-items: center; gap: 6px; margin: 6px 0; padding: 5px 8px; border-left: 3px solid #EA580C;
          background: #FFF7ED; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .tip svg { flex: none; }
-  .ocode-wrap { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+  .ocode-wrap { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 4px; }
   svg.ocode.qr { width: 64px; height: 64px; }
+  /* A status-page link has ~3× the modules of an order number. */
+  svg.ocode.qr.link { width: 96px; height: 96px; }
+  .ocode-cap { font-size: 9px; color: #555; margin-top: 2px; }
   svg.ocode.bc { width: 150px; height: 34px; }
   table.fc { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
   table.fc th { text-align: left; font-size: 10px; border-bottom: 1px solid #111; padding: 2px 4px; }
@@ -1383,6 +1399,9 @@ const LABEL_STYLES = `
   .tip { padding: 3px 5px; font-size: 9px; }
   header .ocode-wrap { display: inline-flex; vertical-align: middle; margin: 0 6px 0 0; }
   svg.ocode.qr { width: 48px; height: 48px; }
+  svg.ocode.qr.link { width: 72px; height: 72px; }
+  header .ocode-wrap { flex-direction: column; align-items: center; }
+  .ocode-cap { font-size: 7px; }
   svg.ocode.bc { width: 120px; height: 28px; }
   @page { size: 4in 6in; margin: 0; }
   @media print { .page { padding: 0.15in; width: 4in; } }

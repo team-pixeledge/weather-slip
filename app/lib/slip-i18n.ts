@@ -86,6 +86,8 @@ export interface SlipStrings {
   shipping: string;
   tax: string;
   thanks: string;
+  /** Under the QR code that opens the customer's order status page. */
+  scanOrder: string;
   /** Bad-weather warnings on the dispatch/delivery days. */
   warnRain: string;
   warnFreezing: string;
@@ -162,6 +164,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Shipping",
     tax: "Tax",
     thanks: "Thank you for shopping with us!",
+    scanOrder: "Scan to see your order",
     warnRain: "Rain likely",
     warnFreezing: "Freezing",
     warnHot: "Very hot",
@@ -234,6 +237,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Frais de port",
     tax: "Taxes",
     thanks: "Merci pour votre achat !",
+    scanOrder: "Scannez pour voir votre commande",
     warnRain: "Pluie probable",
     warnFreezing: "Gel",
     warnHot: "Très chaud",
@@ -306,6 +310,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Versand",
     tax: "Steuern",
     thanks: "Vielen Dank für Ihren Einkauf!",
+    scanOrder: "Scannen, um Ihre Bestellung zu sehen",
     warnRain: "Regen wahrscheinlich",
     warnFreezing: "Frost",
     warnHot: "Sehr heiß",
@@ -378,6 +383,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Envío",
     tax: "Impuestos",
     thanks: "¡Gracias por tu compra!",
+    scanOrder: "Escanea para ver tu pedido",
     warnRain: "Lluvia probable",
     warnFreezing: "Helada",
     warnHot: "Mucho calor",
@@ -450,6 +456,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Spedizione",
     tax: "Imposte",
     thanks: "Grazie per il tuo acquisto!",
+    scanOrder: "Scansiona per vedere il tuo ordine",
     warnRain: "Pioggia probabile",
     warnFreezing: "Gelo",
     warnHot: "Molto caldo",
@@ -522,6 +529,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Frete",
     tax: "Impostos",
     thanks: "Obrigado pela sua compra!",
+    scanOrder: "Leia para ver o seu pedido",
     warnRain: "Chuva provável",
     warnFreezing: "Congelante",
     warnHot: "Muito quente",
@@ -594,6 +602,7 @@ const STRINGS: Record<SlipLanguage, SlipStrings> = {
     shipping: "Verzending",
     tax: "Btw",
     thanks: "Bedankt voor je aankoop!",
+    scanOrder: "Scan om je bestelling te bekijken",
     warnRain: "Kans op regen",
     warnFreezing: "Vorst",
     warnHot: "Zeer heet",

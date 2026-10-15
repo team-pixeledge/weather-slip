@@ -464,8 +464,12 @@ export default function PackingSlip() {
                 {flag("showOrderDate", "Order date")}
                 {flag("showShippingMethod", "Shipping method")}
                 <s-select
-                  label="Scannable order number"
-                  details="For warehouses: scan the slip to find the order."
+                  label="Scannable code"
+                  details={
+                    d.orderCode === "qr"
+                      ? "Your customer scans it with their phone and sees their order — what they bought and its tracking."
+                      : "For warehouses: a scanner reads the order number to find the order."
+                  }
                   value={d.orderCode}
                   onChange={(e) =>
                     setD({
@@ -474,8 +478,9 @@ export default function PackingSlip() {
                   }
                 >
                   <s-option value="none">None</s-option>
-                  <s-option value="qr">QR code</s-option>
-                  <s-option value="barcode">Barcode (Code 128)</s-option>
+                  <s-option value="qr">QR code — opens the customer&apos;s order page</s-option>
+                  <s-option value="qr_number">QR code — order number (warehouse)</s-option>
+                  <s-option value="barcode">Barcode — order number (Code 128)</s-option>
                 </s-select>
               </s-stack>
             </s-section>
