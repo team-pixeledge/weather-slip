@@ -27,7 +27,13 @@ import {
   type BillingInterval,
   type PlanId,
 } from "../lib/plans";
-import { ensureShop, usageSummary } from "../lib/shop.server";
+import {
+  ensureShop,
+  isChecklistStep,
+  setChecklistStep,
+  usageSummary,
+  type ChecklistStep,
+} from "../lib/shop.server";
 import { UsageBanner } from "../components/UsageBanner";
 import { notifyAdmin } from "../lib/alerts.server";
 
@@ -63,6 +69,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     printed: printedOrders > 0,
     printFromShopify: features.printFromShopify,
     flowAutomation: features.flowAutomation,
+    // Outside-the-app steps: ticked when the app saw them happen, or by hand.
+    outside: shop.checklistDone.filter(isChecklistStep),
   };
 
   const usage = {
@@ -101,6 +109,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 type ActionResult =
   | { ok: true; confirmationUrl: string }
   | { ok: true; switchedTo: PlanId }
+  | { ok: true; checklist: true }
   | { ok: false; error: string };
 
 export const action = async ({
@@ -108,6 +117,13 @@ export const action = async ({
 }: ActionFunctionArgs): Promise<ActionResult> => {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
+  // "Mark as done" / "Undo" on a Get started step done outside the app.
+  if (form.get("intent") === "checklist") {
+    const step = form.get("step");
+    if (!isChecklistStep(step)) return { ok: false, error: "Unknown step." };
+    await setChecklistStep(session.shop, step, form.get("done") === "1");
+    return { ok: true, checklist: true };
+  }
   const target = String(form.get("plan")) as PlanId;
   const interval: BillingInterval =
     form.get("interval") === "ANNUAL" ? "ANNUAL" : "MONTHLY";
@@ -258,18 +274,23 @@ interface ChecklistState {
   printed: boolean;
   printFromShopify: boolean;
   flowAutomation: boolean;
+  outside: ChecklistStep[];
 }
 
 /**
- * Getting started. `done` null = done outside the app (Shopify Flow, the
- * Shopify packing slip), so it can't be ticked; `plan` = the step needs a
- * higher plan.
+ * Getting started. Every step the plan includes counts toward "n of m".
+ * `step` = done outside the app (Shopify's print menu, Flow, the Liquid
+ * snippet): ticked automatically when the app sees it happen
+ * (Shop.checklistDone), or by the merchant's "Mark as done". `plan` = the
+ * step needs a higher plan (shown, not counted).
  */
 function Checklist({ c }: { c: ChecklistState }) {
   const steps: {
     title: string;
     body: React.ReactNode;
-    done: boolean | null;
+    done: boolean;
+    /** Done outside the app: the merchant can tick it by hand. */
+    step?: ChecklistStep;
     plan?: string;
   }[] = [
     {
@@ -296,7 +317,8 @@ function Checklist({ c }: { c: ChecklistState }) {
     },
     {
       title: "Print from Shopify's own Orders page",
-      done: null,
+      step: "printFromShopify",
+      done: c.outside.includes("printFromShopify"),
       plan: c.printFromShopify ? undefined : "Starter",
       body: (
         <>
@@ -308,7 +330,8 @@ function Checklist({ c }: { c: ChecklistState }) {
     },
     {
       title: "Save weather automatically with Shopify Flow",
-      done: null,
+      step: "flow",
+      done: c.outside.includes("flow"),
       plan: c.flowAutomation ? undefined : "Pro",
       body: (
         <>
@@ -324,7 +347,8 @@ function Checklist({ c }: { c: ChecklistState }) {
     },
     {
       title: "Optional: weather on Shopify's own packing slip",
-      done: null,
+      step: "snippet",
+      done: c.outside.includes("snippet"),
       body: (
         <>
           Copy the snippet from{" "}
@@ -333,7 +357,14 @@ function Checklist({ c }: { c: ChecklistState }) {
       ),
     },
   ];
-  const tracked = steps.filter((s) => s.done !== null && !s.plan);
+  const fetcher = useFetcher<typeof action>();
+  // Optimistic while a "Mark as done"/"Undo" is on its way.
+  if (fetcher.formData) {
+    const step = fetcher.formData.get("step");
+    for (const s of steps) if (s.step === step) s.done = fetcher.formData.get("done") === "1";
+  }
+  // Every step the plan includes counts; locked ones are shown, not counted.
+  const tracked = steps.filter((s) => !s.plan);
   const doneCount = tracked.filter((s) => s.done).length;
   return (
     <div style={CARD}>
@@ -390,6 +421,22 @@ function Checklist({ c }: { c: ChecklistState }) {
                   <s-badge>{`${s.plan} plan`}</s-badge>
                 </>
               )}
+              {s.step && !s.plan && (
+                <>
+                  {" "}
+                  <s-button
+                    variant="tertiary"
+                    onClick={() =>
+                      fetcher.submit(
+                        { intent: "checklist", step: s.step!, done: s.done ? "0" : "1" },
+                        { method: "POST" },
+                      )
+                    }
+                  >
+                    {s.done ? "Undo" : "Mark as done"}
+                  </s-button>
+                </>
+              )}
               <br />
               <span style={{ color: "#4a4a4a" }}>{s.body}</span>
             </span>
@@ -424,7 +471,7 @@ export default function Plans() {
     if ("confirmationUrl" in result) {
       // Shopify's approval screen must be a top-level page, not the iframe.
       window.open(result.confirmationUrl, "_top");
-    } else {
+    } else if ("switchedTo" in result) {
       shopify.toast.show(`You're on the ${PLANS[result.switchedTo].name} plan`);
     }
   }, [result, shopify]);

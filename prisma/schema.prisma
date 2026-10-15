@@ -108,6 +108,9 @@ model Shop {
   // Highest usage alert emailed this period (0, 80 or 100). Reset with the
   // period and on a plan change — see usage-alerts.server.ts.
   usageAlertLevel  Int      @default(0)
+  // Get-started steps done outside the app (CHECKLIST_STEPS): ticked
+  // automatically when the app sees them happen, or by the merchant.
+  checklistDone    String[] @default([])
 
   updatedAt DateTime @updatedAt
 

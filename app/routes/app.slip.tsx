@@ -34,7 +34,7 @@ import {
 import { sampleSlipData } from "../lib/slip-sample";
 import { DISTANCE_UNITS, type DistanceUnit } from "../lib/distance";
 import { listLocations } from "../lib/distance.server";
-import { PLANS, planSlipOptions, plansWith, templatePlan } from "../lib/plans";
+import { PLANS, planShippingDays, planSlipOptions, plansWith, templatePlan } from "../lib/plans";
 import { SLIP_LANGUAGES, type SlipLanguage } from "../lib/slip-i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -71,6 +71,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     brandLogoUrl,
     unit: shop.unit,
     today: localDate(new Date(), shop.timezone),
+    shipping: planShippingDays(shop),
     shopName: session.shop.replace(/\.myshopify\.com$/, ""),
   };
 };
@@ -142,6 +143,7 @@ export default function PackingSlip() {
     const { shop, order, weather, distance } = sampleSlipData(
       loaded.today,
       loaded.shopName,
+      loaded.shipping,
     );
     return renderPackingSlips(shop, [order], weather, {
       unit: loaded.unit,
@@ -152,7 +154,7 @@ export default function PackingSlip() {
       slip: previewOptions,
       distance,
     });
-  }, [previewOptions, loaded.today, loaded.shopName, loaded.unit]);
+  }, [previewOptions, loaded.today, loaded.shopName, loaded.shipping, loaded.unit]);
 
   const isLabel = o.template === "LABEL_4X6";
   // Save stays faded until something differs from what's saved.

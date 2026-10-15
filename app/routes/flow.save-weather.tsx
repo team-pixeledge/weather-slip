@@ -6,6 +6,7 @@ import { flowFailure, flowOrderId } from "../lib/flow-action";
 import { ordersToPrint } from "../lib/orders.server";
 import { PLANS, plansWith } from "../lib/plans";
 import { drainQueue } from "../lib/queue-runner.server";
+import { setChecklistStep } from "../lib/shop.server";
 import { weatherForSlips } from "../lib/slip-weather.server";
 
 // Shopify Flow action "Save weather on order" (extensions/weather-slip-flow-save).
@@ -32,6 +33,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   const orderId = flowOrderId(payload);
   if (!orderId) return flowFailure(400, "No order in this workflow step.");
+  // A workflow reached us: the Get started step is done.
+  await setChecklistStep(shop.shop, "flow");
 
   const work = (async () => {
     const { orders } = await ordersToPrint(admin, [orderId]);

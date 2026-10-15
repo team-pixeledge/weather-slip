@@ -9,7 +9,7 @@ import { notifyAdmin } from "./alerts.server";
 import { drainQueue } from "./queue-runner.server";
 import { brandLogoIfFresh } from "./brand-logo.server";
 import { escapeHtml, isSlipTemplate, renderCustomerList, SLIP_TEMPLATES, renderPackingSlips, resolveLogo } from "./slip";
-import { recordPrints, slipOptions } from "./shop.server";
+import { recordPrints, setChecklistStep, slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 import { distancesForSlips } from "./distance.server";
 import { planAllowsOrder, PLANS, planSlipOptions, plansWith } from "./plans";
@@ -165,6 +165,7 @@ async function renderPrint(
       : undefined;
     html = renderPackingSlips(shopInfo, orders, weather, { ...doc, unit: shop.unit, slip, distance, notice });
     await recordPrints(shop.shop, orders.map((o) => o.id.slice(o.id.lastIndexOf("/") + 1)));
+    if (opts.fromShopify) await setChecklistStep(shop.shop, "printFromShopify");
   }
   return new Response(html, { headers: securityHeaders(nonce, opts.frameAncestors) });
 }

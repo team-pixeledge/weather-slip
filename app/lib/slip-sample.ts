@@ -2,12 +2,20 @@
 // server imports) so the preview renders in the browser with the same
 // renderer the print tab uses. Dates are relative to today so the
 // forecast strip always looks current.
-import { addDays } from "./dates";
+import { addDays, shippingDates, type ShippingDateSettings } from "./dates";
 import { haversineKm, type SlipDistance } from "./distance";
 import type { PrintOrder, PrintShop } from "./orders.server";
 import type { SlipWeather } from "./slip";
 
-export function sampleSlipData(today: string, shopName: string) {
+export function sampleSlipData(
+  today: string,
+  shopName: string,
+  /** The shop's real shipping days (plan + "Count weekdays only"), so the
+   *  preview's dispatch/delivery land where a real order placed today
+   *  would — never on a weekend the merchant excluded. */
+  shipping: ShippingDateSettings = { handlingDays: 1, transitDays: 2, skipWeekends: false },
+) {
+  const dates = shippingDates({ orderDate: today }, shipping);
   const shop: PrintShop = {
     name: shopName,
     contactEmail: "hello@your-store.example",
@@ -103,8 +111,8 @@ export function sampleSlipData(today: string, shopName: string) {
     status: "ok",
     city: "Denver",
     countryCode: "US",
-    dispatch: addDays(today, 1),
-    delivery: addDays(today, 3),
+    dispatch: dates.dispatch,
+    delivery: dates.delivery,
     current: { tempC: 18.4, label: "Few clouds" },
     days: labels.map((label, i) => ({
       date: addDays(today, i),

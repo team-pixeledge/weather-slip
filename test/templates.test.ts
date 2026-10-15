@@ -53,6 +53,17 @@ describe("slip templates", () => {
     expect(render({ footer: "<b>Hi</b>" })).toContain("&lt;b&gt;Hi&lt;/b&gt;");
   });
 
+  it("sample preview dates follow the shop's shipping days and weekday setting", () => {
+    // Thursday order, handling 1 + transit 2: Fri dispatch, Tue delivery when
+    // weekends are skipped — never Sunday.
+    const w = sampleSlipData("2026-10-15", "x", { handlingDays: 1, transitDays: 2, skipWeekends: true })
+      .weather.get("1")!;
+    expect([w.dispatch, w.delivery]).toEqual(["2026-10-16", "2026-10-20"]);
+    const plain = sampleSlipData("2026-10-15", "x", { handlingDays: 1, transitDays: 2, skipWeekends: false })
+      .weather.get("1")!;
+    expect(plain.delivery).toBe("2026-10-18");
+  });
+
   it("breaks between slips only, never after the last (no blank page)", () => {
     // The mark and script follow the last .page, so a break-after on
     // .page with a :last-child exception still broke after it.

@@ -163,6 +163,33 @@ export async function markCounted(shop: string, orderId: string, now = new Date(
     ON CONFLICT DO NOTHING`;
 }
 
+/** Get-started steps done outside the app (Plans page checklist). */
+export const CHECKLIST_STEPS = ["printFromShopify", "flow", "snippet"] as const;
+export type ChecklistStep = (typeof CHECKLIST_STEPS)[number];
+export const isChecklistStep = (v: unknown): v is ChecklistStep =>
+  (CHECKLIST_STEPS as readonly unknown[]).includes(v);
+
+/**
+ * Tick (or untick) a checklist step. Called automatically when the app
+ * sees the step happen (a print from Shopify's Orders page, a Flow run)
+ * and from the Plans page's "Mark as done". Never throws — it's display
+ * state and mustn't break a print or a Flow run.
+ */
+export async function setChecklistStep(shop: string, step: ChecklistStep, done = true): Promise<void> {
+  try {
+    if (done) {
+      await prisma.$executeRaw`
+        UPDATE "Shop" SET "checklistDone" = array_append("checklistDone", ${step})
+         WHERE shop = ${shop} AND NOT (${step} = ANY("checklistDone"))`;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE "Shop" SET "checklistDone" = array_remove("checklistDone", ${step}) WHERE shop = ${shop}`;
+    }
+  } catch (err) {
+    console.warn("[checklist]", step, err instanceof Error ? err.message : err);
+  }
+}
+
 /** How far back the Orders page looks for Flow-saved orders not yet printed. */
 export const READY_TO_PRINT_DAYS = 14;
 

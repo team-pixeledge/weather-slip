@@ -117,6 +117,9 @@ the Liquid snippet for Shopify's own slip/Order Printer/emails) is optional.
 `/app/slip` picks the shop's default template and options with a live
 preview (sample order from `slip-sample.ts`, rendered client-side in a
 sandboxed iframe by the same `renderPackingSlips` the print tab uses).
+  The sample's dispatch/delivery come from `shippingDates` with the shop's
+  `planShippingDays` (it used to be today+1/+3, landing on weekends with
+  "Count weekdays only" on).
 - Weather icons (`weather-icons.ts`): inline SVG chosen from the
   condition *label* (clear / partly / cloudy / rain / storm / snow / fog),
   so it's provider-neutral; used in forecast cards, tables and "Now".
@@ -246,8 +249,12 @@ switch confirmed inline, "Compare all features" table.
 
 Ticks come from the shop's own data: slip saved (`slipDesign`), first
 print (`CountedOrder`). (The shipping-days step was
-removed when shipping days became fixed by plan.) Steps done
-outside the app (Flow, Shopify's print menu, snippet) can't be ticked.
+removed when shipping days became fixed by plan.) Steps done outside the
+app live in `Shop.checklistDone` (`CHECKLIST_STEPS`): printing from
+Shopify's print menu and a Flow run tick themselves (`setChecklistStep`);
+any of them can be marked/unmarked by hand. The badge counts every step
+the plan includes ("2 of 4"), not only the auto-tracked ones — showing
+"2 of 2" over five listed steps confused merchants (2026-10-15).
 
 ## Printed orders (added 2026-10-14)
 
