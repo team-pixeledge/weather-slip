@@ -64,6 +64,15 @@ describe("slip templates", () => {
     expect(plain.delivery).toBe("2026-10-18");
   });
 
+  it("tells the fit-to-one-page script the sheet size for each paper/label", () => {
+    expect(render({ template: "CLASSIC", paper: "A4" })).toContain('data-sheet-w="793.7" data-sheet-h="1122.5"');
+    expect(render({ template: "CLASSIC", paper: "LETTER" })).toContain('data-sheet-w="816" data-sheet-h="1056"');
+    expect(render({ template: "LABEL_4X6" })).toContain('data-sheet-w="384" data-sheet-h="576"');
+    const html = render({ template: "CLASSIC" });
+    expect(html).toContain("fit-measure");
+    expect(html).toMatch(/<script nonce="n">\(function \(\) \{/);
+  });
+
   it("breaks between slips only, never after the last (no blank page)", () => {
     // The mark and script follow the last .page, so a break-after on
     // .page with a :last-child exception still broke after it.

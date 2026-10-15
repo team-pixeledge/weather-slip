@@ -144,6 +144,14 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   `break-after` on `.page` — the mark and script follow the last page in
   `<body>`, so a `:last-child` exception never matched and every print
   had a blank last page (fixed 2026-10-15, tested).
+- **Fit to one page** (2026-10-15): a full slip (logo, distance, cards,
+  items, footer) ran a few lines past A4/Letter/labels, printing a
+  near-empty second page. `FIT_SCRIPT` measures each `.page` at the sheet
+  width with its print padding (`.fit-measure`, sheet px on `<body
+  data-sheet-w/h>` from `PAPER_SIZES.px`/label size) and zooms it to fit
+  if it overflows by ≤40%; longer slips still flow. Runs on load, on
+  beforeprint and before auto-print, also in Shopify's print preview.
+  Verified with headless-Chrome PDFs of every template (all 1 page).
 - **No `style=""` attributes in slip HTML.** The print page's CSP only
   allows its nonce'd `<style>`, so inline styles are silently dropped in
   real prints — while the in-app preview (srcdoc, no CSP) still shows

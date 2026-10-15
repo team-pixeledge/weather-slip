@@ -177,20 +177,24 @@ export const PAPER_SIZES: {
   label: string;
   css: string;
   maxWidth: string;
+  /** Sheet size in CSS px (96/in), for fitting a slip onto one page. */
+  px: [number, number];
 }[] = [
-  { id: "A4", label: "A4 (210 × 297 mm)", css: "A4", maxWidth: "210mm" },
-  { id: "A5", label: "A5 (148 × 210 mm)", css: "A5", maxWidth: "148mm" },
+  { id: "A4", label: "A4 (210 × 297 mm)", css: "A4", maxWidth: "210mm", px: [793.7, 1122.5] },
+  { id: "A5", label: "A5 (148 × 210 mm)", css: "A5", maxWidth: "148mm", px: [559.4, 793.7] },
   {
     id: "LETTER",
     label: "US Letter (8.5 × 11 in)",
     css: "letter",
     maxWidth: "8.5in",
+    px: [816, 1056],
   },
   {
     id: "LEGAL",
     label: "US Legal (8.5 × 14 in)",
     css: "legal",
     maxWidth: "8.5in",
+    px: [816, 1344],
   },
 ];
 
@@ -1265,6 +1269,7 @@ const BASE_STYLES = `
   .bar button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 0; background: #fff; color: #111; cursor: pointer; }
   .page { background: #fff; width: 100%; max-width: 210mm; margin: 16px auto; padding: 14mm 12mm;
           position: relative; isolation: isolate; }
+  .page.fit-measure { margin: 0 !important; max-width: none !important; min-height: 0 !important; }
   .wm { position: absolute; inset: 0; z-index: -1; display: flex; align-items: center; justify-content: center;
         overflow: hidden; pointer-events: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .wm span { font-size: var(--wm-size, 72px); font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
@@ -1431,8 +1436,46 @@ function printMargin(m: string): string {
     .page { padding: ${m} ${m} calc(${m} + 8mm);
             box-decoration-break: clone; -webkit-box-decoration-break: clone; }
     .ws-mark { display: flex; bottom: calc(${m} - 2mm); }
-  }`;
+  }
+  .page.fit-measure { padding: ${m} ${m} calc(${m} + 8mm); }`;
 }
+
+/** The printed sheet in CSS px for these options (see FIT_SCRIPT). */
+function sheetPx(o: SlipOptions): [number, number] {
+  if (o.template === "LABEL_4X6") return o.design.labelSize === "4x4" ? [384, 384] : [384, 576];
+  return (PAPER_SIZES.find((x) => x.id === o.paper) ?? PAPER_SIZES[0]!).px;
+}
+
+/**
+ * A slip a little taller than its sheet spilled a few lines (footer, mark,
+ * gift message) onto a second page. Before printing, each .page is laid out
+ * at the sheet's width with its print padding (.fit-measure) and measured;
+ * if it overflows by up to 40% it's zoomed to fit one sheet (laid out
+ * wider by 1/zoom so it still fills the width). Longer slips (many items)
+ * keep flowing onto more pages. CSSOM styles are allowed under the nonce
+ * CSP; style="" in markup is not.
+ */
+const FIT_SCRIPT = `(function () {
+  var b = document.body, W = +b.getAttribute("data-sheet-w"), H = +b.getAttribute("data-sheet-h");
+  if (!W || !H) return;
+  function fit() {
+    var pages = document.querySelectorAll(".page");
+    for (var i = 0; i < pages.length; i++) {
+      var p = pages[i];
+      p.style.zoom = ""; p.style.maxWidth = "";
+      p.classList.add("fit-measure"); p.style.width = W + "px";
+      var h = p.scrollHeight;
+      p.classList.remove("fit-measure"); p.style.width = "";
+      if (h <= H - 2) continue;
+      var z = (H - 6) / h;
+      if (z < 0.6) continue;
+      p.style.maxWidth = "none"; p.style.width = (W / z) + "px"; p.style.zoom = String(z);
+    }
+  }
+  window.__fitPages = fit;
+  if (document.readyState === "complete") fit(); else window.addEventListener("load", fit);
+  window.addEventListener("beforeprint", fit);
+})();`;
 
 /** The merchant's look, as CSS variables the base styles read. */
 function designVars(d: SlipDesign, label: boolean): string {
@@ -1472,6 +1515,8 @@ interface DocOptions {
   lang: string;
   /** Shown in the toolbar only (never printed), e.g. orders skipped by plan. */
   notice?: string;
+  /** Sheet size in CSS px: slips slightly taller than it are fitted to one page. */
+  sheet?: [number, number];
 }
 
 /** Printed at the foot of every page (in place of the browser's URL line). */
@@ -1491,12 +1536,14 @@ function documentHtml(
   styles: string,
   d: DocOptions,
 ): string {
-  const script = d.chrome
-    ? `<script nonce="${d.nonce}">
-  document.getElementById("print").addEventListener("click", function () { window.print(); });
-  ${d.autoPrint ? `window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 300); });` : ""}
-</script>`
+  // Fit runs in Shopify's print preview too (no toolbar there); the in-app
+  // preview iframe is sandboxed without scripts, so it never runs there.
+  const fit = d.sheet ? FIT_SCRIPT : "";
+  const toolbar = d.chrome
+    ? `document.getElementById("print").addEventListener("click", function () { window.print(); });
+  ${d.autoPrint ? `window.addEventListener("load", function () { setTimeout(function () { if (window.__fitPages) window.__fitPages(); window.print(); }, 300); });` : ""}`
     : "";
+  const script = fit || toolbar ? `<script nonce="${d.nonce}">${fit}\n${toolbar}</script>` : "";
   return `<!doctype html>
 <html lang="${d.lang}">
 <head>
@@ -1506,7 +1553,7 @@ function documentHtml(
 <title>${escapeHtml(title)}</title>
 <style nonce="${d.nonce}">${styles}</style>
 </head>
-<body>
+<body${d.sheet ? ` data-sheet-w="${d.sheet[0]}" data-sheet-h="${d.sheet[1]}"` : ""}>
 ${d.chrome ? `<div class="bar"><span>${escapeHtml(title)}${d.notice ? ` — <em>${escapeHtml(d.notice)}</em>` : ""}</span><button type="button" id="print">Print / Save as PDF</button></div>` : ""}
 ${body}
 ${d.mark ? WS_MARK : ""}
@@ -1562,6 +1609,7 @@ export function renderPackingSlips(
     mark: o.design.showBranding,
     lang: o.design.language,
     notice: opts.notice,
+    sheet: sheetPx(o),
   });
 }
 
