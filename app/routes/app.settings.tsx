@@ -264,8 +264,10 @@ function FlowGuide({ available, plans }: { available: boolean; plans: string }) 
         <s-stack direction="block" gap="base">
           <s-paragraph>
             Save each order&apos;s weather as soon as it&apos;s paid, so Shopify&apos;s own
-            packing slip shows it and printing is instant. Saving doesn&apos;t use your
-            plan&apos;s prints — printing the slip does. Takes about a minute:
+            packing slip shows it and the order waits under &ldquo;ready to print&rdquo; on the
+            Orders page — one click prints them all (a browser can&apos;t start your printer on
+            its own). Saving doesn&apos;t use your plan&apos;s prints — printing the slip does.
+            Takes about a minute:
           </s-paragraph>
           <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
             {FLOW_STEPS.map((step, i) => (

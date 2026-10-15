@@ -4,6 +4,7 @@ import { METAFIELD_FORECAST_KEY, METAFIELD_NAMESPACE } from "./constants";
 import { enqueue } from "./jobs.server";
 import { cacheKey } from "./location";
 import { notifyAdminLater } from "./alerts.server";
+import { localDate } from "./dates";
 import { orderShippingDates } from "./order-weather.server";
 import { query, type GraphqlClient, type PrintOrder } from "./orders.server";
 import { chargePrint, markCounted, providerFor } from "./shop.server";
@@ -54,7 +55,8 @@ async function saveForecasts(admin: GraphqlClient, fresh: [string, SlipWeather][
  * (from today at the destination through the provider's horizon — slips
  * are printed at packing time) and saves it on the order as the
  * weather_slip.forecast metafield. Every reprint reads that back: no API
- * call, the same slip every time.
+ * call, the same slip every time — except an unshipped order whose dispatch
+ * day has passed, which gets today's dates and a fresh forecast once.
  *
  * This is where usage is taken: plans count prints with weather, not API
  * calls — every order on every print, reprints included (the same order
@@ -103,9 +105,18 @@ export async function weatherForSlips(
   await Promise.all(
     orders.map(async (order, i) => {
       const id = ids[i]!;
-      // Printed before: reuse the forecast saved on the order.
+      const computed = orderShippingDates(order, shop, now);
+      // Printed before: reuse the forecast saved on the order — unless the
+      // order hasn't shipped and its dispatch day has passed (user decision
+      // 2026-10-15). Then the dates roll forward to today and the forecast
+      // is fetched again for the new days; once fulfilled, the real ship
+      // date is used and nothing moves again.
+      const unshipped = order.fulfillments.length === 0;
+      const today = localDate(now, shop.timezone);
+      const missed = (d: string | null | undefined) => unshipped && d != null && d < today;
       const saved = parseSavedSlipWeather(order.savedForecast?.value);
-      if (saved) {
+      const rolled = saved ? missed(saved.dispatch) : false;
+      if (saved && !rolled) {
         // No weather API call, but a reprint is still a print.
         out.set(
           id,
@@ -122,10 +133,12 @@ export async function weatherForSlips(
         return;
       }
       const snap = snapBy.get(id);
-      const computed = orderShippingDates(order, shop);
-      // Keep the dates the saved snapshot used, so slip and metafield agree.
-      const dispatch = snap?.dispatchDate ?? computed.dispatch;
-      const delivery = snap?.deliveryDate ?? computed.delivery;
+      // Keep the dates the saved snapshot used, so slip and metafield agree —
+      // unless they're a missed dispatch day; the REFRESH below moves the
+      // metafield along with the slip.
+      const stale = rolled || missed(snap?.dispatchDate);
+      const dispatch = (!stale && snap?.dispatchDate) || computed.dispatch;
+      const delivery = (!stale && snap?.deliveryDate) || computed.delivery;
       const a = order.shippingAddress;
       const place = { city: a?.city ?? null, countryCode: a?.countryCodeV2 ?? null };
 
@@ -147,7 +160,7 @@ export async function weatherForSlips(
           out.set(id, { status: "limit_reached", ...place, dispatch, delivery });
           return;
         }
-        if (snap?.status !== "OK" && snap?.status !== "PENDING_DATES") {
+        if (stale || (snap?.status !== "OK" && snap?.status !== "PENDING_DATES")) {
           // Listed above, so the job may run (jobs never charge).
           await enqueue(shop.shop, id, snap ? "REFRESH" : "CREATE");
         }

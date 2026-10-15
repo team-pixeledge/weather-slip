@@ -51,10 +51,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const resetsAt = elapsed
     ? now + periodMs
     : shop.usagePeriodStart.getTime() + periodMs;
-  const [failedJobs, printedOrders, templateRequests] = await Promise.all([
+  const [failedJobs, printedOrders] = await Promise.all([
     prisma.weatherJob.count({ where: { shop: session.shop, status: "FAILED" } }),
     prisma.countedOrder.count({ where: { shop: session.shop } }),
-    prisma.templateRequest.count({ where: { shop: session.shop } }),
   ]);
   // Onboarding checklist: steps the app can see are ticked from the shop's
   // own data; the rest (done outside the app) stay as plain how-tos.
@@ -62,10 +61,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const checklist = {
     slipSaved: shop.slipDesign != null,
     printed: printedOrders > 0,
-    requested: templateRequests > 0,
     printFromShopify: features.printFromShopify,
     flowAutomation: features.flowAutomation,
-    customTemplateRequest: features.customTemplateRequest,
   };
 
   const usage = {
@@ -200,7 +197,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "What does each plan include?",
-    "Free: 30 prints a month, the Classic template, today + 2 days of forecast, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list, the Order Printer setup guide and a watermark word (PAID, FRAGILE, GIFT…). Pro: 2,000 prints, adds today + 3 days of forecast, the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer, Shopify Flow and a watermark with your own text. Business: 5,000 prints, adds today + 4 days of forecast, the 4×6 / 4×4 shipping label, a custom template built for your brand, a logo watermark, and removes the Weather Slip mark.",
+    "Free: 30 prints a month, the Classic template, today + 2 days of forecast, unfulfilled orders. Starter: 500 prints, adds the Minimal template, the dispatch-day forecast, printing from Shopify's Orders page, the customer list, the Order Printer setup guide and a watermark word (PAID, FRAGILE, GIFT…). Pro: 2,000 prints, adds today + 3 days of forecast, the Detailed template with prices, every order view (fulfilled, unpaid, cancelled, archived), slips in 7 languages, distance to the customer, Shopify Flow and a watermark with your own text. Business: 5,000 prints, adds today + 4 days of forecast, the 4×6 / 4×4 shipping label, a logo watermark, and removes the Weather Slip mark.",
   ],
   [
     "Which orders are listed?",
@@ -224,11 +221,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "How does the Shopify Flow automation work? (Pro and Business)",
-    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it and the slip prints instantly. Saving doesn't use your allowance; printing the slip does. Settings has a step-by-step guide with a picture of the finished workflow.",
-  ],
-  [
-    "How do I get a custom template? (Business)",
-    "Open Packing slip → Custom template, describe what you need and send it. We reply by email, and the request's status shows on that page.",
+    "In Shopify Flow, start a workflow with “Order paid” or “Order fulfilled” and add the Weather Slip action “Save weather on order”. Each order then gets its forecast saved straight away, so Shopify's own packing slip shows it, and it appears under “ready to print” at the top of Weather Slip's Orders page — one click prints all of them. (No app can make your printer start by itself; a browser only prints from a page you have open.) Saving doesn't use your allowance; printing the slip does. Settings has a step-by-step guide with a picture of the finished workflow.",
   ],
   [
     "How do upgrading and downgrading work?",
@@ -248,7 +241,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Where does the weather come from, and how far ahead?",
-    "Weather data © OpenWeather (openweathermap.org), used under the Open Database License (ODbL); every slip carries that credit. The forecast is for the order's shipping city. It is fetched when the order's slip is first printed (or when Shopify Flow saves it) and saved on the order — it isn't live weather, and slips printed from the app always reprint that saved forecast. The slip shows today at the destination plus the next 2 days on Free and Starter, 3 on Pro and 4 on Business (or only dispatch to delivery within that, if you choose it in Packing slip → Weather), with the dispatch and delivery days marked and, by default, the time the forecast was taken. If the delivery day is further out, the slip says so. The one-line weather on Shopify's own packing slip follows the saved weather too; it's updated only if the shipping address changes before the order ships or a day that was beyond the forecast range comes into range, and it's frozen once the order is fulfilled.",
+    "Weather data © OpenWeather (openweathermap.org), used under the Open Database License (ODbL); every slip carries that credit. The forecast is for the order's shipping city. It is fetched when the order's slip is first printed (or when Shopify Flow saves it) and saved on the order — it isn't live weather, and slips printed from the app reprint that saved forecast. One exception: if an order still hasn't shipped after its dispatch day has passed, the next print moves dispatch to today (and delivery along with it) and fetches the forecast again for the new days. The slip shows today at the destination plus the next 2 days on Free and Starter, 3 on Pro and 4 on Business (or only dispatch to delivery within that, if you choose it in Packing slip → Weather), with the dispatch and delivery days marked and, by default, the time the forecast was taken. If the delivery day is further out, the slip says so. The one-line weather on Shopify's own packing slip follows the saved weather too; it's updated only if the shipping address changes before the order ships, a day that was beyond the forecast range comes into range, or a missed dispatch day moves to today, and it's frozen once the order is fulfilled.",
   ],
   [
     "Which printers and paper sizes work?",
@@ -263,10 +256,8 @@ const FAQ: [string, string][] = [
 interface ChecklistState {
   slipSaved: boolean;
   printed: boolean;
-  requested: boolean;
   printFromShopify: boolean;
   flowAutomation: boolean;
-  customTemplateRequest: boolean;
 }
 
 /**
@@ -341,20 +332,6 @@ function Checklist({ c }: { c: ChecklistState }) {
         </>
       ),
     },
-    ...(c.customTemplateRequest
-      ? [
-          {
-            title: "Ask for a custom template",
-            done: c.requested,
-            body: (
-              <>
-                Included in Business: describe it in{" "}
-                <s-link href="/app/slip">Packing slip → Custom template</s-link>.
-              </>
-            ),
-          },
-        ]
-      : []),
   ];
   const tracked = steps.filter((s) => s.done !== null && !s.plan);
   const doneCount = tracked.filter((s) => s.done).length;
@@ -796,8 +773,22 @@ export default function Plans() {
         {/* ---- Onboarding checklist + FAQ ---- */}
         <Checklist c={d.checklist} />
 
-        <div style={CARD}>
-          <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 4 }}>
+        <div
+          style={{
+            ...CARD,
+            width: "100%",
+            maxWidth: 820,
+            margin: "0 auto",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 650,
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
             FAQ
           </div>
           {FAQ.map(([q, a]) => (

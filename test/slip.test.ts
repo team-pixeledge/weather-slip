@@ -46,6 +46,13 @@ describe("orderSearchQuery: views and date range", () => {
     expect(orderSearchQuery("all", "", "any", now)).toBe(NO_SHIPPING_FILTER);
     expect(orderSearchQuery("all", "#1001", "any", now)).toBe(`${NO_SHIPPING_FILTER} AND (#1001)`);
   });
+  it("narrows to given order IDs (Ready to print); an empty set matches nothing", () => {
+    expect(orderSearchQuery("unfulfilled", "", "any", now, ["11", "22"])).toBe(
+      `${NO_SHIPPING_FILTER} AND status:open AND (fulfillment_status:unfulfilled OR fulfillment_status:partial) AND (id:11 OR id:22)`,
+    );
+    expect(orderSearchQuery("all", "", "any", now, [])).toBe(`${NO_SHIPPING_FILTER} AND id:0`);
+    expect(orderSearchQuery("all", "", "any", now, ["1 OR x"])).toBe(`${NO_SHIPPING_FILTER} AND id:0`);
+  });
   it("adds a created_at bound for a range", () => {
     expect(orderSearchQuery("archived", "", "180", now)).toBe(
       `${NO_SHIPPING_FILTER} AND status:closed AND created_at:>=2026-04-15`,

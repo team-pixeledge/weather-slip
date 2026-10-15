@@ -8,7 +8,7 @@ import { verifyPrintToken } from "./print-token.server";
 import { notifyAdmin } from "./alerts.server";
 import { drainQueue } from "./queue-runner.server";
 import { brandLogoIfFresh } from "./brand-logo.server";
-import { escapeHtml, isSlipTemplate, renderCustomerList, renderPackingSlips, resolveLogo } from "./slip";
+import { escapeHtml, isSlipTemplate, renderCustomerList, SLIP_TEMPLATES, renderPackingSlips, resolveLogo } from "./slip";
 import { recordPrints, slipOptions } from "./shop.server";
 import { weatherForSlips } from "./slip-weather.server";
 import { distancesForSlips } from "./distance.server";
@@ -97,6 +97,17 @@ async function renderPrint(
     return message(
       403,
       `The customer list is on the ${plansWith((p) => p.customerList)} plans. Upgrade in Weather Slip → Plans & pricing.`,
+    );
+  }
+
+  // A template picked for this print that the plan doesn't include is
+  // refused, not quietly printed as Classic (the merchant would think they
+  // got the layout they chose). Only the saved default is coerced.
+  if (kind === "slips" && isSlipTemplate(tpl) && !plan.templates.includes(tpl)) {
+    const name = SLIP_TEMPLATES.find((t) => t.id === tpl)?.name ?? tpl;
+    return message(
+      403,
+      `The ${name} template is on the ${plansWith((p) => p.templates.includes(tpl))} plans — your ${plan.name} plan includes ${plan.templates.map((t) => SLIP_TEMPLATES.find((x) => x.id === t)?.name ?? t).join(" and ")}. Pick one of those, or upgrade in Weather Slip → Plans & pricing.`,
     );
   }
 

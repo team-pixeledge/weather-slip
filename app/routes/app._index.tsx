@@ -15,7 +15,7 @@ import {
   type OrderRange,
   type OrderView,
 } from "../lib/order-views";
-import { ensureShop, slipOptions, usageSummary } from "../lib/shop.server";
+import { ensureShop, readyToPrintIds, slipOptions, usageSummary } from "../lib/shop.server";
 import { UsageBanner } from "../components/UsageBanner";
 import { isSlipTemplate, SLIP_TEMPLATES, type SlipTemplate } from "../lib/slip";
 import { signPrintToken } from "../lib/print-token.server";
@@ -87,14 +87,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const usage = { ...usageSummary(shop), canUpgrade: shop.plan !== "BUSINESS" };
 
-  const { rows, pageInfo } = await listOrders(admin, {
-    view,
-    search,
-    range,
-    after: url.searchParams.get("after"),
-    before: url.searchParams.get("before"),
-    pageSize: perPage,
-  });
+  // "Ready to print": weather saved by Shopify Flow, slip not printed yet,
+  // still unfulfilled (checked with Shopify — an order shipped without a
+  // slip drops out). ?ready=1 narrows the list to them.
+  const readyCandidates = await readyToPrintIds(session.shop, new Date(), 100);
+  const readyOnly = url.searchParams.get("ready") === "1" && readyCandidates.length > 0;
+  const [{ rows, pageInfo }, ready] = await Promise.all([
+    listOrders(admin, {
+      view: readyOnly ? "unfulfilled" : view,
+      search,
+      range,
+      after: url.searchParams.get("after"),
+      before: url.searchParams.get("before"),
+      pageSize: perPage,
+      ...(readyOnly ? { ids: readyCandidates } : {}),
+    }),
+    readyCandidates.length
+      ? listOrders(admin, { view: "unfulfilled", search: "", ids: readyCandidates, pageSize: 100 }).then((r) =>
+          r.rows.map((o) => o.id),
+        )
+      : Promise.resolve([] as string[]),
+  ]);
 
   // Which of these orders have had their slip printed (dimmed + "Reprint").
   const printed = rows.length
@@ -122,6 +135,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     view,
+    readyOnly,
+    ready,
     search,
     range,
     perPage,
@@ -181,6 +196,8 @@ function PrintedBadge({ id, printed }: { id: string; printed: { count: number; d
 export default function Orders() {
   const {
     view,
+    readyOnly,
+    ready,
     search,
     range,
     perPage,
@@ -308,6 +325,33 @@ export default function Orders() {
         </s-banner>
       )}
 
+      {ready.length > 0 && (
+        // Flow can't print by itself (browsers only print from an open
+        // page), so what it saved waits here for one click.
+        <s-banner
+          tone="success"
+          heading={`${ready.length} order${ready.length === 1 ? "" : "s"} ready to print`}
+        >
+          Shopify Flow saved the weather on {ready.length === 1 ? "this order" : "these orders"}.
+          Print {ready.length === 1 ? "its slip" : "all their slips"} in one go — each order uses
+          one print from your plan.
+          {ready.length > MAX_PRINT_ORDERS && ` The first ${MAX_PRINT_ORDERS} print now; the rest stay here.`}
+          <s-button
+            slot="secondary-actions"
+            variant="primary"
+            onClick={() => openPrint("slips", ready.slice(0, MAX_PRINT_ORDERS))}
+          >
+            {`Print ${ready.length === 1 ? "it" : `${Math.min(ready.length, MAX_PRINT_ORDERS)} slips`}`}
+          </s-button>
+          <s-button
+            slot="secondary-actions"
+            onClick={() => update({ ready: readyOnly ? null : "1", after: null, before: null })}
+          >
+            {readyOnly ? "Show all orders" : "Show them"}
+          </s-button>
+        </s-banner>
+      )}
+
       {tooMany && (
         <s-banner tone="warning">
           You can print up to {MAX_PRINT_ORDERS} orders at a time — {selected.size} are selected.
@@ -323,57 +367,60 @@ export default function Orders() {
           onNextPage={() => update({ after: pageInfo.endCursor, before: null })}
           onPreviousPage={() => update({ before: pageInfo.startCursor, after: null })}
         >
-          {selected.size > 0 ? (
-            // Bulk actions replace the filters while orders are selected,
-            // as on Shopify's Orders page.
-            <s-stack slot="filters" direction="inline" gap="small-300" alignItems="center">
-              <s-text type="strong">{selected.size} selected</s-text>
-              <s-select
-                label="Slip template"
-                labelAccessibilityVisibility="exclusive"
-                value={template}
-                onChange={(e) => {
-                  const v = e.currentTarget.value;
-                  if (isSlipTemplate(v)) setTemplate(v);
-                }}
-              >
-                {SLIP_TEMPLATES.map((t) => {
-                  const locked = !plan.templates.includes(t.id);
-                  return (
-                    <s-option key={t.id} value={t.id} disabled={locked}>
-                      {t.name}
-                      {t.id === defaultTemplate ? " (default)" : ""}
-                      {locked ? ` — ${PLANS[templatePlan(t.id)].name} plan` : ""}
-                    </s-option>
-                  );
-                })}
-              </s-select>
-              <s-button
-                variant="primary"
-                disabled={tooMany}
-                onClick={() => openPrint("slips", selectedIds)}
-              >
-                Print packing slips
-              </s-button>
-              <s-button
-                disabled={tooMany || !plan.customerList}
-                onClick={() => openPrint("customers", selectedIds)}
-                {...(!plan.customerList
-                  ? { accessibilityLabel: `Print customer list — on ${customerListPlans}` }
-                  : {})}
-              >
-                {plan.customerList ? "Print customer list" : "Customer list (Starter+)"}
-              </s-button>
-              <s-button variant="tertiary" onClick={() => setSelected(new Map())}>
-                Clear
-              </s-button>
-            </s-stack>
-          ) : (
-            // One row like Shopify's: view picker, search filling the rest,
-            // date. Plain CSS grid — s-grid's container-query columns never
-            // applied inside the table's filter slot.
+          {/* Filters stay visible; while orders are selected the bulk actions
+              sit above them as their own row (they used to replace the filters,
+              and the template picker stretched across the bar). */}
+          <div slot="filters" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {selected.size > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <s-text type="strong">{selected.size} selected</s-text>
+                <div style={{ width: 240 }}>
+                  <s-select
+                    label="Slip template"
+                    labelAccessibilityVisibility="exclusive"
+                    value={template}
+                    onChange={(e) => {
+                      const v = e.currentTarget.value;
+                      if (isSlipTemplate(v)) setTemplate(v);
+                    }}
+                  >
+                    {SLIP_TEMPLATES.map((t) => {
+                      const locked = !plan.templates.includes(t.id);
+                      return (
+                        <s-option key={t.id} value={t.id} disabled={locked}>
+                          {t.name}
+                          {t.id === defaultTemplate ? " (default)" : ""}
+                          {locked ? ` — ${PLANS[templatePlan(t.id)].name} plan` : ""}
+                        </s-option>
+                      );
+                    })}
+                  </s-select>
+                </div>
+                <s-button
+                  variant="primary"
+                  disabled={tooMany}
+                  onClick={() => openPrint("slips", selectedIds)}
+                >
+                  Print packing slips
+                </s-button>
+                <s-button
+                  disabled={tooMany || !plan.customerList}
+                  onClick={() => openPrint("customers", selectedIds)}
+                  {...(!plan.customerList
+                    ? { accessibilityLabel: `Print customer list — on ${customerListPlans}` }
+                    : {})}
+                >
+                  {plan.customerList ? "Print customer list" : "Customer list (Starter+)"}
+                </s-button>
+                <s-button variant="tertiary" onClick={() => setSelected(new Map())}>
+                  Clear
+                </s-button>
+              </div>
+            )}
+            {/* One row like Shopify's: view picker, search filling the rest,
+                date. Plain CSS grid — s-grid's container-query columns never
+                applied inside the table's filter slot. */}
             <div
-              slot="filters"
               style={{
                 display: "grid",
                 gridTemplateColumns: "140px minmax(0, 1fr) 160px 130px",
@@ -441,7 +488,7 @@ export default function Orders() {
                 ))}
               </s-select>
             </div>
-          )}
+          </div>
 
           <s-table-header-row>
             <s-table-header listSlot="inline">

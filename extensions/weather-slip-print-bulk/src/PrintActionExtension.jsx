@@ -1,6 +1,6 @@
 import "@shopify/ui-extensions/preact";
 import { render } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 // "Weather slip" in the Print menu of Shopify's own Orders section. The
 // document is rendered by the app at /print/admin (same templates and
@@ -27,6 +27,20 @@ function Extension() {
   const ids = all.slice(0, MAX);
   const [kind, setKind] = useState("slips");
   const [tpl, setTpl] = useState("");
+  // The shop's plan, so locked templates show as such instead of quietly
+  // printing as Classic. Until it loads (or if it fails) everything is
+  // listed and /print/admin refuses a locked one with an explanation.
+  const [options, setOptions] = useState(null);
+  useEffect(() => {
+    fetch("/api/print-options")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setOptions)
+      .catch(() => {});
+  }, []);
+  const lockedPlan = (id) => {
+    const t = options?.templates.find((x) => x.id === id);
+    return t && !t.allowed ? t.plan : null;
+  };
 
   const params = new URLSearchParams({ kind, ids: ids.join(",") });
   if (kind === "slips" && tpl) params.set("tpl", tpl);
@@ -54,11 +68,15 @@ function Extension() {
             value={tpl}
             onChange={(e) => setTpl(e.currentTarget.value)}
           >
-            {TEMPLATES.map(([value, key]) => (
-              <s-option key={key} value={value}>
-                {i18n.translate(key)}
-              </s-option>
-            ))}
+            {TEMPLATES.map(([value, key]) => {
+              const locked = value ? lockedPlan(value) : null;
+              return (
+                <s-option key={key} value={value} disabled={!!locked}>
+                  {i18n.translate(key)}
+                  {locked ? ` — ${i18n.translate("lockedOn", { plan: locked })}` : ""}
+                </s-option>
+              );
+            })}
           </s-select>
         )}
         <s-text color="subdued">{i18n.translate("usage")}</s-text>

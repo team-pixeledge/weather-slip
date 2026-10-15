@@ -1340,8 +1340,11 @@ const BASE_STYLES = `
   @media print {
     body { background: #fff; }
     .bar { display: none; }
-    .page { margin: 0; padding: 0; max-width: none; break-after: page; }
-    .page:last-child { break-after: auto; }
+    .page { margin: 0; padding: 0; max-width: none; }
+    /* Break before every slip but the first: a break after the last one
+       (the mark and script follow it, so :last-child never matched)
+       printed a blank extra page. */
+    .page + .page { break-before: page; }
     .day, tr, li { break-inside: avoid; }
   }
 `;

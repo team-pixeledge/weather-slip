@@ -44,6 +44,22 @@ describe("shippingDates", () => {
       ),
     ).toEqual({ dispatch: "2026-10-14", delivery: "2026-10-20" });
   });
+  it("rolls a missed dispatch day forward to today until the order ships", () => {
+    const quick = { handlingDays: 1, transitDays: 1, skipWeekends: false };
+    // Ordered 12-10, due out 13-10, still unshipped on 15-10.
+    expect(shippingDates({ orderDate: "2026-10-12", today: "2026-10-15" }, quick)).toEqual({
+      dispatch: "2026-10-15",
+      delivery: "2026-10-16",
+    });
+    // Not missed yet: unchanged.
+    expect(shippingDates({ orderDate: "2026-10-12", today: "2026-10-13" }, quick).dispatch).toBe("2026-10-13");
+    // Shipped late: the real date wins.
+    expect(
+      shippingDates({ orderDate: "2026-10-12", today: "2026-10-20", fulfilledDate: "2026-10-15" }, quick).dispatch,
+    ).toBe("2026-10-15");
+    // Missed on a Saturday with weekends skipped: next weekday.
+    expect(shippingDates({ orderDate: "2026-10-12", today: "2026-10-17" }, settings).dispatch).toBe("2026-10-19");
+  });
 });
 
 it("shortDay", () => {

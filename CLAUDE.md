@@ -30,7 +30,11 @@ and deploy traps this app's config already avoids).
 - **Reprints never change by accident.** The first snapshot is written once
   per order; a duplicate CREATE is a no-op. Recompute only on: a real
   destination change (`locationKey` fingerprint differs) before shipping, a
-  merchant Refresh, or a pending-date fill. Fulfillment **freezes** the
+  merchant Refresh, a pending-date fill, or a **missed dispatch day** (user
+  decision 2026-10-15: an unshipped order whose dispatch date is before
+  today in the shop's timezone gets dispatch = today, next weekday if
+  skipping weekends — `shippingDates({ today })` — and the print path
+  refetches the slip forecast and enqueues REFRESH). Fulfillment **freezes** the
   snapshot (`frozenAt`) — it is not recomputed with the real ship date, so a
   slip printed while picking matches any later reprint.
 - **Pending fill only fills.** A date beyond the provider's horizon prints
@@ -64,8 +68,8 @@ The Orders page is the app home (`/app`, `rel="home"` in the nav, so the admin s
 Shopify's own Orders page on purpose (user request: familiar + compact):
 same tabs (All, Unfulfilled, Unpaid, Open, Archived), columns (Order, Date,
 Customer, Channel, Total, Payment/Fulfillment badges, Items, Delivery
-method, Tags) plus Weather; bulk print actions replace the filter row while
-orders are selected; 25/50/100/250 rows a page (`?per=`, default 50); it
+method, Tags) plus Weather; bulk print actions appear as a row above the filters while
+orders are selected (the filters/search stay visible — 2026-10-15); 25/50/100/250 rows a page (`?per=`, default 50); it
 re-runs its loader every 30s while visible and on the first page, so new
 orders appear without a reload (views;
 date range Any time/30/60/180/365 days via `created_at:>=`; orders older
@@ -86,8 +90,9 @@ PDF (no headless Chrome on Vercel).
   destination → provider horizon, dispatch/delivery outlined) and saves it
   on the order as metafield `weather_slip.forecast` (JSON SlipWeather,
   `parseSavedSlipWeather` reads it back). Every reprint — in-app or from
-  Shopify's Print menu — uses that: no weather/geocode API call, no usage,
-  identical slip. Only "ok" forecasts are saved, so a limit-reached or
+  Shopify's Print menu — uses that: no weather/geocode API call, identical
+  slip — except an unshipped order whose saved dispatch day has passed,
+  which is fetched again once with rolled-forward dates (see above). Only "ok" forecasts are saved, so a limit-reached or
   no-address print can still get weather later. The slip reuses the
   snapshot's dispatch/delivery dates when one exists.
 - **Plan limits on print:** each order with a usable destination (or saved
@@ -132,6 +137,10 @@ sandboxed iframe by the same `renderPackingSlips` the print tab uses).
   fonts under the CSP), five text sizes, label 4×6 or 4×4. Customer email
   prints only once Email is granted in protected customer data.
 - `/app/slip`: template row, settings column + sticky live preview.
+- **Page breaks**: `.page + .page { break-before: page }`. Never
+  `break-after` on `.page` — the mark and script follow the last page in
+  `<body>`, so a `:last-child` exception never matched and every print
+  had a blank last page (fixed 2026-10-15, tested).
 - **No `style=""` attributes in slip HTML.** The print page's CSP only
   allows its nonce'd `<style>`, so inline styles are silently dropped in
   real prints — while the in-app preview (srcdoc, no CSP) still shows
@@ -236,7 +245,7 @@ switch confirmed inline, "Compare all features" table.
 ## Get started checklist (Plans page)
 
 Ticks come from the shop's own data: slip saved (`slipDesign`), first
-print (`CountedOrder`), template request. (The shipping-days step was
+print (`CountedOrder`). (The shipping-days step was
 removed when shipping days became fixed by plan.) Steps done
 outside the app (Flow, Shopify's print menu, snippet) can't be ticked.
 
@@ -298,8 +307,11 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
   closed orders are skipped unless printed before; skipped ones are named in
   the toolbar, or a 403 page if all are), because Starter can print from
   Shopify's own Orders page.
-- Pro+: slip language, distance, Shopify Flow action. Business: custom
-  template requests, hiding the Weather Slip mark.
+- Pro+: slip language, distance, Shopify Flow action. Business: hiding the
+  Weather Slip mark. (Custom template requests were removed entirely
+  2026-10-15, user decision — form, plan flag, checklist step, FAQ, and the
+  `TemplateRequest` table, dropped by `20261015120000_drop_template_requests`.
+  Don't re-add.)
 - **Watermark** (user decision 2026-10-14, merchant's own, tiered): Free
   none, Starter `WATERMARK_PRESETS` words only, Pro any text, Business logo
   (the slip's resolved logo) or text — `planWatermark`. Rendered as `.wm`
@@ -308,8 +320,12 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
 - **Settings are stored as chosen and clamped at every render** by
   `planSlipOptions` (print route, Orders default, slip preview), so a
   downgrade + re-upgrade loses nothing. Only the saved default template is
-  coerced to Classic on save if locked. The admin print extensions still
-  list all four templates; a locked one prints as Classic.
+  coerced to Classic on save if locked. A locked template *picked for one
+  print* (`?tpl=`, in-app or from Shopify's print menu) is refused with a
+  403 page naming the plans that have it — not silently printed as
+  Classic (2026-10-15). The admin print extensions read
+  `/api/print-options` (authenticate.admin + cors) and disable locked
+  templates in their menu.
 - **Yearly billing**: subscription name "Pro (yearly)", `interval: ANNUAL`,
   price `annualPriceUsd`. `planFromBillingName`/`intervalFromBillingName`
   map names back — never rename existing subscription names. Usage still
@@ -332,6 +348,15 @@ then finish in the background and return 200. 4xx bodies
 reached (not 429 — that retries for 36 h), 404 order. Weather failure →
 503 so Flow retries. Needs `shopify app deploy` to exist in Flow.
 
+**Flow can't print** (it runs on Shopify's servers; browsers only print
+from an open page). Instead the Orders page shows a "n orders ready to
+print" banner (user decision 2026-10-15): `readyToPrintIds` = CountedOrder
+rows from the last 14 days with no PrintedOrder, re-checked with Shopify
+as unfulfilled (`listOrders({ ids })` → `id:` OR-filter; empty set =
+`id:0`). One button prints the first 50; `?ready=1` lists only them.
+An order printed only via Shopify's own Liquid slip never gets a
+PrintedOrder, so it stays "ready" until the 14 days pass or it ships.
+
 Flow template `extensions/weather-slip-flow-paid` (released in
 weather-slip-11, 2026-10-14): "Order paid → Save weather on order".
 `template.flow` is the Flow editor's export, kept verbatim (its hash
@@ -339,14 +364,6 @@ prefix isn't a plain SHA-256 — don't hand-edit; rebuild in Flow and
 re-export). Locales en + fr. Shopify reviews templates before they show in
 the library; the deep link for an in-app "Set up in Flow" button comes from
 the library's Share button after publishing.
-
-## Custom template requests (Business, added 2026-10-14)
-
-`TemplateRequest` table (migration `20261014120000_template_requests`),
-form on Packing slip, 3 per 30 days per shop, operator emailed via
-`sendAlertEmail`. Status (RECEIVED/IN_PROGRESS/DONE/DECLINED) is moved by
-hand in the DB; the merchant sees it on the page. Building the template
-itself is manual dev work.
 
 ## Operator alerts (added 2026-10-13)
 

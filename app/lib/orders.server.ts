@@ -51,10 +51,17 @@ export function orderSearchQuery(
   search: string,
   range: OrderRange = "any",
   now = new Date(),
+  /** Only these numeric order IDs (e.g. the "Ready to print" set). */
+  ids?: string[],
 ): string {
   const parts: string[] = [NO_SHIPPING_FILTER];
   const base = (ORDER_VIEWS.find((v) => v.id === view) ?? ORDER_VIEWS[0]!).filter;
   if (base) parts.push(base);
+  if (ids) {
+    const safe = ids.filter((id) => /^\d+$/.test(id));
+    // An empty set must match nothing, not everything.
+    parts.push(safe.length ? `(${safe.map((id) => `id:${id}`).join(" OR ")})` : "id:0");
+  }
   if (range !== "any") {
     const since = new Date(now.getTime() - Number(range) * 86_400_000).toISOString().slice(0, 10);
     parts.push(`created_at:>=${since}`);
@@ -162,11 +169,12 @@ export async function listOrders(
     after?: string | null;
     before?: string | null;
     pageSize?: number;
+    ids?: string[];
   },
 ) {
   const size = opts.pageSize ?? 25;
   const data = await query<ListData>(admin, LIST_QUERY, {
-    query: orderSearchQuery(opts.view, opts.search, opts.range) || null,
+    query: orderSearchQuery(opts.view, opts.search, opts.range, new Date(), opts.ids) || null,
     ...(opts.before ? { last: size, before: opts.before } : { first: size, after: opts.after ?? null }),
   });
   // Belt and braces for the filter above: a POS sale with no address.

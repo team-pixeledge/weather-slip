@@ -52,6 +52,14 @@ describe("slip templates", () => {
   it("escapes a custom footer", () => {
     expect(render({ footer: "<b>Hi</b>" })).toContain("&lt;b&gt;Hi&lt;/b&gt;");
   });
+
+  it("breaks between slips only, never after the last (no blank page)", () => {
+    // The mark and script follow the last .page, so a break-after on
+    // .page with a :last-child exception still broke after it.
+    const html = render({ template: "CLASSIC" });
+    expect(html).not.toMatch(/break-after:\s*page/);
+    expect(html).toContain(".page + .page { break-before: page; }");
+  });
 });
 
 describe("plans", () => {

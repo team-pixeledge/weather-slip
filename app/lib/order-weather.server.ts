@@ -70,12 +70,14 @@ export function orderShippingDates(
     fulfillments: { createdAt: string; estimatedDeliveryAt: string | null }[];
   },
   shop: Shop,
+  now = new Date(),
 ) {
   const fulfillment = order.fulfillments[0];
   const tz = shop.timezone;
   return shippingDates(
     {
       orderDate: localDate(new Date(order.createdAt), tz),
+      today: localDate(now, tz),
       fulfilledDate: fulfillment ? localDate(new Date(fulfillment.createdAt), tz) : null,
       estimatedDeliveryDate: fulfillment?.estimatedDeliveryAt
         ? localDate(new Date(fulfillment.estimatedDeliveryAt), tz)
@@ -244,7 +246,7 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
       settings,
     );
   } else {
-    const dates = orderShippingDates(order, current);
+    const dates = orderShippingDates(order, current, now);
     snap = buildSnapshot({
       forecast,
       horizonDays: horizon,

@@ -163,6 +163,27 @@ export async function markCounted(shop: string, orderId: string, now = new Date(
     ON CONFLICT DO NOTHING`;
 }
 
+/** How far back the Orders page looks for Flow-saved orders not yet printed. */
+export const READY_TO_PRINT_DAYS = 14;
+
+/**
+ * "Ready to print": orders whose weather Shopify Flow saved (markCounted)
+ * that were never printed, newest first. Browsers can't print on their
+ * own, so a Flow run can only line the slip up; the Orders page offers
+ * these as one click (user decision 2026-10-15). The caller still checks
+ * with Shopify that they're unfulfilled.
+ */
+export async function readyToPrintIds(shop: string, now = new Date(), limit = 250): Promise<string[]> {
+  const since = new Date(now.getTime() - READY_TO_PRINT_DAYS * 86_400_000);
+  const rows = await prisma.$queryRaw<{ orderId: string }[]>`
+    SELECT c."orderId" FROM "CountedOrder" c
+     WHERE c.shop = ${shop} AND c."countedAt" >= ${since}
+       AND NOT EXISTS (SELECT 1 FROM "PrintedOrder" p WHERE p.shop = c.shop AND p."orderId" = c."orderId")
+     ORDER BY c."countedAt" DESC
+     LIMIT ${limit}`;
+  return rows.map((r) => r.orderId);
+}
+
 /** Print dates kept per order for the Orders page tooltip. */
 export const PRINT_HISTORY_MAX = 50;
 

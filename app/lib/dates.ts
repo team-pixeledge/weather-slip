@@ -77,19 +77,26 @@ export interface ShippingDateFacts {
   fulfilledDate?: IsoDate | null;
   /** Carrier/merchant estimate from the fulfillment, if Shopify has one. */
   estimatedDeliveryDate?: IsoDate | null;
+  /** Today in the shop's timezone: an unshipped order can't dispatch earlier. */
+  today?: IsoDate;
 }
 
 /**
- * Dispatch = actual fulfillment date, else order date + handling days.
+ * Dispatch = actual fulfillment date, else order date + handling days —
+ * rolled forward to today (next weekday when skipping weekends) once that
+ * day has passed without a shipment (user decision 2026-10-15: a missed
+ * dispatch day isn't printed on a reprint).
  * Delivery = the fulfillment's estimate, else dispatch + transit days.
  */
 export function shippingDates(
   facts: ShippingDateFacts,
   settings: ShippingDateSettings,
 ): { dispatch: IsoDate; delivery: IsoDate } {
-  const dispatch =
-    facts.fulfilledDate ??
-    addWorkingDays(facts.orderDate, settings.handlingDays, settings.skipWeekends);
+  let planned = addWorkingDays(facts.orderDate, settings.handlingDays, settings.skipWeekends);
+  if (facts.today && planned < facts.today) {
+    planned = addWorkingDays(facts.today, 0, settings.skipWeekends);
+  }
+  const dispatch = facts.fulfilledDate ?? planned;
   const delivery =
     facts.estimatedDeliveryDate ??
     addWorkingDays(dispatch, settings.transitDays, settings.skipWeekends);
