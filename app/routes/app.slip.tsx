@@ -379,6 +379,19 @@ export default function PackingSlip() {
                   />
                 )}
                 <s-select
+                  label="Title position"
+                  value={d.titleAlign}
+                  onChange={(e) =>
+                    setD({
+                      titleAlign: e.currentTarget
+                        .value as SlipDesign["titleAlign"],
+                    })
+                  }
+                >
+                  <s-option value="center">Centre of the page</s-option>
+                  <s-option value="left">Left</s-option>
+                </s-select>
+                <s-select
                   label="Logo position"
                   value={d.logoPosition}
                   disabled={d.logoSource === "none"}
@@ -389,7 +402,7 @@ export default function PackingSlip() {
                     })
                   }
                 >
-                  <s-option value="left">Left, beside the title</s-option>
+                  <s-option value="left">Left</s-option>
                   <s-option value="center">Centre, above the title</s-option>
                   <s-option value="right">
                     Right, above the order number

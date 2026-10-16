@@ -293,6 +293,8 @@ export interface SlipDesign {
   /** Custom logo link. https://cdn.shopify.com/… only — the print page's CSP allows no other image host. */
   logoUrl: string | null;
   logoPosition: LogoPosition;
+  /** Title across the middle of the page, or at the left (full-page templates). */
+  titleAlign: "center" | "left";
   logoSize: SizeKey; // legacy preset; logoHeight wins
   /** Logo height in px on full-page templates (labels scale it down). */
   logoHeight: number;
@@ -383,6 +385,7 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   logoSource: "store",
   logoUrl: null,
   logoPosition: "left",
+  titleAlign: "center",
   logoSize: "M",
   logoHeight: 56,
   logoMaxWidth: 220,
@@ -503,6 +506,7 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
         : pick("logoSource", ["store", "custom", "none"] as const),
     logoUrl,
     logoPosition: pick("logoPosition", ["left", "center", "right"] as const),
+    titleAlign: pick("titleAlign", ["center", "left"] as const),
     logoSize: pick("logoSize", ["S", "M", "L"] as const),
     // Older saves only had a preset size; map it to pixels.
     logoHeight: clampInt(
@@ -1198,8 +1202,11 @@ function fullPage(order: PrintOrder, c: PageCtx): string {
           ${d.showOrderDate ? `<p>${escapeHtml(longDate(order.createdAt, c.timeZone, loc))}</p>` : ""}
           ${d.showShippingMethod && order.shippingLine ? `<p>${escapeHtml(order.shippingLine.title)}</p>` : ""}
         </div>`;
-  const header =
-    d.logoPosition === "center"
+  // Centred title: a 3-column header (left logo | title | order meta) so the
+  // title sits in the middle of the page, not between logo and meta.
+  const header = d.titleAlign === "center"
+    ? `${d.logoPosition === "center" && logo ? `<div class="logo-center">${logo}</div>` : ""}<header class="title-center"><div class="brand">${d.logoPosition === "left" ? logo : ""}</div><h1>${title}</h1>${meta}</header>`
+    : d.logoPosition === "center"
       ? `${logo ? `<div class="logo-center">${logo}</div>` : ""}<header><h1>${title}</h1>${meta}</header>`
       : d.logoPosition === "left"
         ? `<header><div class="brand">${logo}<h1>${title}</h1></div>${meta}</header>`
@@ -1295,6 +1302,9 @@ const BASE_STYLES = `
   header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   header h1 { font-size: 1.85em; color: var(--accent, #111); }
   header .brand { display: flex; align-items: center; gap: 12px; }
+  header.title-center { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; }
+  header.title-center h1 { text-align: center; }
+  header.title-center .meta { justify-self: end; }
   .logo { display: block; object-fit: contain; height: auto; width: auto;
           max-height: var(--logo-h, 56px); max-width: var(--logo-w, 220px); }
   header .meta .logo { margin: 0 0 6px auto; }
