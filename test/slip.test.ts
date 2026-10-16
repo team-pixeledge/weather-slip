@@ -170,6 +170,41 @@ describe("renderPackingSlips", () => {
   });
 });
 
+describe("weekdays only", () => {
+  // Free plan (today + 2) on Fri 16 Oct: dispatch Fri, delivery Mon 19.
+  const weekdayForecast: ForecastPayload = {
+    ...forecast,
+    daily: ["2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19", "2026-10-20"].map((date) => ({
+      date, minC: 5, maxC: 12, precipProb: 5, code: 800, label: "Clear sky",
+    })),
+  };
+  const w: SlipWeather = {
+    status: "ok", city: "Beals", countryCode: "US", dispatch: "2026-10-16", delivery: "2026-10-19",
+    ...slipForecast(weekdayForecast, "2026-10-16", 4), asOf: "2026-10-16T04:43:00Z", source: "openweather",
+  };
+  const render = (skipWeekends: boolean) =>
+    renderPackingSlips(shop, [order], new Map([["1001", w]]), {
+      unit: "C", timeZone: "UTC", nonce: "x",
+      slip: { ...DEFAULT_SLIP_OPTIONS, design: { ...DEFAULT_SLIP_OPTIONS.design, maxDaysAhead: 2, skipWeekends } },
+    });
+
+  it("counts the plan's days in weekdays and leaves the weekend off", () => {
+    const html = render(true);
+    expect(html).toContain("Fri 16 Oct");
+    expect(html).toContain("Mon 19 Oct");
+    expect(html).toContain("Tue 20 Oct");
+    expect(html).not.toContain("Sat 17 Oct");
+    expect(html).not.toContain("Sun 18 Oct");
+    expect(html).not.toContain("beyond the forecast range");
+  });
+
+  it("keeps calendar days when weekends count", () => {
+    const html = render(false);
+    expect(html).toContain("Sat 17 Oct");
+    expect(html).toContain("beyond the forecast range");
+  });
+});
+
 describe("renderCustomerList", () => {
   it("lists one row per order", () => {
     const html = renderCustomerList(shop, [order, { ...order, id: "gid://shopify/Order/1002", name: "#1002" }], {

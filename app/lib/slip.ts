@@ -2,7 +2,7 @@
 // document per print run. The browser prints it (or saves it as PDF), so
 // there's no headless Chrome to run on Vercel. Pure: no server imports, so
 // it's unit-tested directly.
-import { addDays, shortDay, type IsoDate } from "./dates";
+import { addDays, isWeekend, shortDay, type IsoDate } from "./dates";
 import { cToF, type Unit } from "./format";
 import { weatherIcon } from "./weather-icons";
 import { DISTANCE_UNITS, formatDistance, type DistanceUnit, type SlipDistance } from "./distance";
@@ -361,6 +361,12 @@ export interface SlipDesign {
    * on the order, so an upgrade shows more days on old orders too.
    */
   maxDaysAhead: number;
+  /**
+   * "Count weekdays only" (the shop's shipping setting, set via
+   * planSlipOptions): maxDaysAhead counts weekdays and weekend days are left
+   * off the forecast, matching how dispatch/delivery dates are counted.
+   */
+  skipWeekends: boolean;
   /** One line of advice when delivery day brings rain, frost or heat. */
   showTip: boolean;
   /** Scannable order number in the header, for warehouses. */
@@ -423,6 +429,7 @@ export const DEFAULT_SLIP_DESIGN: SlipDesign = {
   forecastRange: "all",
   showDispatch: true,
   maxDaysAhead: 4,
+  skipWeekends: false,
   showTip: true,
   orderCode: "none",
   watermark: "none",
@@ -567,6 +574,7 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     forecastRange: pick("forecastRange", ["all", "trip"] as const),
     showDispatch: bool("showDispatch"),
     maxDaysAhead: clampInt(r.maxDaysAhead, 0, 16, d.maxDaysAhead),
+    skipWeekends: d.skipWeekends,
     showTip: bool("showTip"),
     orderCode: pick("orderCode", ["none", "qr", "qr_number", "barcode"] as const),
     watermark: pick("watermark", ["none", "text", "logo"] as const),
@@ -732,9 +740,16 @@ function shownDays(w: Extract<SlipWeather, { status: "ok" }>, d: SlipDesign): Sl
   return trip.length ? trip : inPlan;
 }
 
-/** The forecast days the plan includes: the fetch day + maxDaysAhead. */
+/**
+ * The forecast days the plan includes: the fetch day + maxDaysAhead. With
+ * weekdays only, weekend days are skipped and don't use up the plan's days
+ * (unless one is the actual dispatch/delivery day, e.g. a carrier estimate).
+ */
 function planDays(w: Extract<SlipWeather, { status: "ok" }>, d: SlipDesign): SlipDay[] {
-  return w.days.slice(0, d.maxDaysAhead + 1);
+  const days = d.skipWeekends
+    ? w.days.filter((x) => !isWeekend(x.date) || x.date === w.dispatch || x.date === w.delivery)
+    : w.days;
+  return days.slice(0, d.maxDaysAhead + 1);
 }
 
 /** Last date the slip may show — the plan's range, or the provider's if shorter. */

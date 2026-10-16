@@ -136,9 +136,9 @@ export default function PackingSlip() {
   // The preview uses what will actually be saved (e.g. a non-Shopify logo
   // link is dropped), so it never shows something the print won't.
   const previewOptions = useMemo(() => {
-    const p = planSlipOptions({ ...o, design: sanitizeDesign(o.design) }, loaded.planId);
+    const p = planSlipOptions({ ...o, design: sanitizeDesign(o.design) }, loaded.planId, loaded.shipping.skipWeekends);
     return { ...p, design: resolveLogo(p.design, loaded.brandLogoUrl) };
-  }, [o, loaded.brandLogoUrl, loaded.planId]);
+  }, [o, loaded.brandLogoUrl, loaded.planId, loaded.shipping.skipWeekends]);
   const preview = useMemo(() => {
     const { shop, order, weather, distance } = sampleSlipData(
       loaded.today,

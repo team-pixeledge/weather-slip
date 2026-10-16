@@ -6,7 +6,7 @@ import {
   METAFIELD_SNAPSHOT_KEY,
   METAFIELD_SUMMARY_KEY,
 } from "./constants";
-import { localDate, shippingDates } from "./dates";
+import { addWorkingDays, daysBetween, localDate, shippingDates } from "./dates";
 import { locationKey } from "./location";
 import { planShippingDays, PLANS } from "./plans";
 import { displaySettings, ensureShop, isCounted, providerFor } from "./shop.server";
@@ -233,8 +233,16 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
   const forecast = await cachedForecast(provider, point, now);
   const today = destinationToday(forecast, now);
   const settings = displaySettings(current);
-  // The plan decides how far ahead the saved summary may reach.
-  const horizon = Math.min(provider.horizonDays, PLANS[current.plan].forecastDaysAhead);
+  // The plan decides how far ahead the saved summary may reach — in
+  // weekdays when the shop counts weekdays only, like the slip's forecast.
+  const daysAhead = PLANS[current.plan].forecastDaysAhead;
+  const horizon = Math.min(
+    provider.horizonDays,
+    daysBetween(today, addWorkingDays(today, daysAhead, current.skipWeekends)),
+  );
+  // Retry pending days on the calendar-day window: never later than the
+  // weekday window would let them in.
+  const fillHorizon = Math.min(provider.horizonDays, daysAhead);
 
   let snap: WeatherSnapshot;
   if (job.reason === "PENDING_FILL" && prev?.payload) {
@@ -263,7 +271,7 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
 
   await writeMetafields(admin, job.orderId, snap);
 
-  const fill = nextFillDate(snap, horizon);
+  const fill = nextFillDate(snap, fillHorizon);
   await saveVersion(prev, {
     ...base,
     status: statusFor(snap),

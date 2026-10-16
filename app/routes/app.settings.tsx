@@ -209,6 +209,9 @@ export default function Settings() {
           </s-text>
         </s-stack>
         {toggle("skipWeekends", "Count weekdays only")}
+        <s-text color="subdued">
+          Skips Saturdays and Sundays for dispatch, delivery and the forecast days on the slip.
+        </s-text>
         <s-paragraph>
           Once an order ships, its real fulfillment date and the carrier&apos;s
           estimated delivery date are used instead, when Shopify has them.

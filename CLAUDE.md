@@ -322,7 +322,13 @@ Every gate reads `PLANS` in `plans.ts`; the Plans cards render from
   only" stays the shop's. `Shop.handlingDays/transitDays` and
   `settingsSavedAt` are now unused (kept in the schema); the "Set your
   shipping days" checklist step was removed. handling + transit ≤
-  forecastDaysAhead (tested).
+  forecastDaysAhead (tested). With "Count weekdays only" on, the forecast
+  window counts weekdays too (fixed 2026-10-16: it was today + N *calendar*
+  days, so a weekend pushed the delivery day off the slip and Sat/Sun cards
+  filled the plan's days). `SlipDesign.skipWeekends` (set by
+  `planSlipOptions(o, plan, shop.skipWeekends)`) drops weekend cards unless
+  one is the dispatch/delivery day; order-weather's saved horizon uses the
+  same weekday window, while `nextFillDate` keeps the calendar one.
 - Free/Starter "unfulfilled only" is enforced at print too
   (`planAllowsOrder` in the print route: fulfilled/restocked/cancelled/
   closed orders are skipped unless printed before; skipped ones are named in

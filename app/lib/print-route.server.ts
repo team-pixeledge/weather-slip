@@ -157,7 +157,7 @@ async function renderPrint(
     // include (a locked template falls back to Classic).
     const saved = slipOptions(shop);
     if (isSlipTemplate(tpl)) saved.template = tpl;
-    const slip = planSlipOptions(saved, shop.plan);
+    const slip = planSlipOptions(saved, shop.plan, shop.skipWeekends);
     const brandLogo = slip.design.logoSource === "store" ? await brandLogoIfFresh(admin, shop) : null;
     slip.design = resolveLogo(slip.design, brandLogo);
     const distance = slip.design.showDistance

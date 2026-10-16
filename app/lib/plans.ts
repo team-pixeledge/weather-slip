@@ -184,7 +184,7 @@ export function annualSavingPct(id: PlanId): number {
  * clamped here at every render: a template the plan lacks falls back to
  * Classic, and language, distance and hiding the mark need their plan.
  */
-export function planSlipOptions(o: SlipOptions, plan: PlanId): SlipOptions {
+export function planSlipOptions(o: SlipOptions, plan: PlanId, skipWeekends = false): SlipOptions {
   const p = PLANS[plan];
   return {
     ...o,
@@ -195,6 +195,7 @@ export function planSlipOptions(o: SlipOptions, plan: PlanId): SlipOptions {
       showDistance: p.distance && o.design.showDistance,
       showDispatch: p.dispatchForecast && o.design.showDispatch,
       maxDaysAhead: p.forecastDaysAhead,
+      skipWeekends,
       showBranding: p.removeBranding ? o.design.showBranding : true,
       ...planWatermark(o, p.watermark),
     },
