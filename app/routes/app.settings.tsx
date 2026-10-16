@@ -9,7 +9,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
-import { addDays } from "../lib/dates";
+import { addDays, localDate, shippingDates } from "../lib/dates";
 import { formatSummary, type DisplaySettings, type Unit } from "../lib/format";
 import { PLANS, planShippingDays, plansWith } from "../lib/plans";
 import { ensureShop } from "../lib/shop.server";
@@ -29,6 +29,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
     // Fixed by the plan (read-only here).
     shipping: planShippingDays(shop),
+    // The preview's dates are an order placed today in the shop's timezone.
+    today: localDate(new Date(), shop.timezone),
     plan: PLANS[shop.plan],
     flowPlans: plansWith((p) => p.flowAutomation),
   };
@@ -58,7 +60,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: true };
 };
 
-// Fixed sample so the preview looks the same every day.
+// Sample weather for the preview. Its dates are replaced with a real order
+// placed today, using the plan's shipping days and "Count weekdays only".
 const today = "2026-10-12";
 const SAMPLE = {
   schema: 1 as const,
@@ -106,12 +109,21 @@ export default function Settings() {
     ...s,
     showDispatch: s.showDispatch && loaded.plan.dispatchForecast,
   };
+  const dates = shippingDates(
+    { orderDate: loaded.today },
+    { ...loaded.shipping, skipWeekends: s.skipWeekends },
+  );
+  const sample = {
+    ...SAMPLE,
+    dispatch: { ...SAMPLE.dispatch, date: dates.dispatch },
+    delivery: { ...SAMPLE.delivery, date: dates.delivery },
+  };
   const preview = formatSummary(
     loaded.plan.dispatchForecast
-      ? SAMPLE
+      ? sample
       : {
-          ...SAMPLE,
-          dispatch: { date: SAMPLE.dispatch.date, status: "hidden" },
+          ...sample,
+          dispatch: { date: dates.dispatch, status: "hidden" },
         },
     display,
   );
