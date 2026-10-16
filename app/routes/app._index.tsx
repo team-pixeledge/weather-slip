@@ -193,6 +193,32 @@ function PrintedBadge({ id, printed }: { id: string; printed: { count: number; d
   );
 }
 
+/**
+ * An info banner the merchant closed stays closed in this browser. Per-viewer
+ * convenience only (localStorage), so it may come back in a private window.
+ * Hidden until checked, so a closed banner doesn't flash on load.
+ */
+function useDismissed(key: string): [boolean, () => void] {
+  const storageKey = `weather-slip:dismissed:${key}`;
+  const [dismissed, setDismissed] = useState(true);
+  useEffect(() => {
+    try {
+      setDismissed(window.localStorage.getItem(storageKey) === "1");
+    } catch {
+      setDismissed(false);
+    }
+  }, [storageKey]);
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      window.localStorage.setItem(storageKey, "1");
+    } catch {
+      // Storage blocked: it stays closed until the page reloads.
+    }
+  };
+  return [dismissed, dismiss];
+}
+
 export default function Orders() {
   const {
     view,
@@ -213,6 +239,8 @@ export default function Orders() {
     customerListPlans,
   } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
+  const [viewsNoteClosed, closeViewsNote] = useDismissed("plan-order-views");
+  const [historyNoteClosed, closeHistoryNote] = useDismissed("60-day-orders");
   const [, setParams] = useSearchParams();
   const navigation = useNavigation();
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
@@ -312,15 +340,15 @@ export default function Orders() {
         </s-banner>
       )}
 
-      {plan.orderViews.length === 1 && (
-        <s-banner tone="info">
+      {plan.orderViews.length === 1 && !viewsNoteClosed && (
+        <s-banner tone="info" dismissible onDismiss={closeViewsNote}>
           Your plan lists unfulfilled and partially fulfilled orders. Fulfilled, unpaid, cancelled
           and archived orders are on {viewsPlans} — <s-link href="/app/plans">see plans</s-link>.
         </s-banner>
       )}
 
-      {!allOrdersAccess && (
-        <s-banner tone="info">
+      {!allOrdersAccess && !historyNoteClosed && (
+        <s-banner tone="info" dismissible onDismiss={closeHistoryNote}>
           Showing orders from the last 60 days. Shopify shows apps older orders only once
           &quot;Read all orders&quot; access is approved for Weather Slip.
         </s-banner>
