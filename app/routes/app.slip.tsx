@@ -164,19 +164,27 @@ export default function PackingSlip() {
     !!d.logoUrl &&
     !isShopifyCdnUrl(d.logoUrl.trim());
 
-  const opt = (key: OptionKey, label: string, disabled = false) => (
+  // Greyed out by the template (not the plan): say why, so it doesn't read
+  // as a locked feature.
+  const templateName = SLIP_TEMPLATES.find((t) => t.id === o.template)?.name ?? o.template;
+  const notOnTemplate = (off: boolean) =>
+    off ? `Not on the ${templateName} template — choose another template to use this.` : undefined;
+
+  const opt = (key: OptionKey, label: string, disabled = false, details?: string) => (
     <s-checkbox
       label={label}
       checked={o[key]}
       disabled={disabled}
+      details={details}
       onChange={(e) => setO({ ...o, [key]: e.currentTarget.checked })}
     />
   );
-  const flag = (key: DesignFlag, label: string, disabled = false) => (
+  const flag = (key: DesignFlag, label: string, disabled = false, details?: string) => (
     <s-checkbox
       label={label}
       checked={d[key]}
       disabled={disabled}
+      details={details}
       onChange={(e) =>
         setD({ [key]: e.currentTarget.checked } as Partial<SlipDesign>)
       }
@@ -528,7 +536,7 @@ export default function PackingSlip() {
                     ))}
                   </s-select>
                 )}
-                {opt("showBilling", "Bill-to address", isLabel)}
+                {opt("showBilling", "Bill-to address", isLabel, notOnTemplate(isLabel))}
                 {flag("showPhone", "Phone number")}
                 {flag("showEmail", "Customer email")}
                 {flag("showPaymentStatus", "Payment status")}
@@ -547,6 +555,7 @@ export default function PackingSlip() {
                   "showImages",
                   "Product images",
                   o.template === "MINIMAL" || isLabel,
+                  notOnTemplate(o.template === "MINIMAL" || isLabel),
                 )}
                 <s-select
                   label="Image size"
@@ -759,9 +768,9 @@ export default function PackingSlip() {
                   onInput={(e) => setO({ ...o, footer: e.currentTarget.value })}
                 />
                 {flag("showStoreName", "Store name")}
-                {flag("showStoreAddress", "Store address", isLabel)}
-                {flag("showStoreEmail", "Store email", isLabel)}
-                {flag("showStoreWebsite", "Store website", isLabel)}
+                {flag("showStoreAddress", "Store address", isLabel, notOnTemplate(isLabel))}
+                {flag("showStoreEmail", "Store email", isLabel, notOnTemplate(isLabel))}
+                {flag("showStoreWebsite", "Store website", isLabel, notOnTemplate(isLabel))}
                 <s-text-area
                   label="Extra footer text"
                   details="Optional — returns policy, care instructions, a discount code…"
