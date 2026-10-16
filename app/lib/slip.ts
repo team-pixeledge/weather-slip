@@ -580,7 +580,8 @@ export function sanitizeDesign(raw: unknown): SlipDesign {
     maxDaysAhead: clampInt(r.maxDaysAhead, 0, 16, d.maxDaysAhead),
     skipWeekends: d.skipWeekends,
     showTip: bool("showTip"),
-    orderCode: pick("orderCode", ["none", "qr", "qr_number", "barcode"] as const),
+    // "qr_number" (order-number QR) was removed; it meant warehouse scanning.
+    orderCode: r.orderCode === "qr_number" ? "barcode" : pick("orderCode", ["none", "qr", "barcode"] as const),
     watermark: pick("watermark", ["none", "text", "logo"] as const),
     watermarkText: text("watermarkText"),
     watermarkSize: pick("watermarkSize", ["S", "M", "L"] as const),

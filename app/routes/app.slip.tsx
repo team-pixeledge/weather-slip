@@ -492,7 +492,6 @@ export default function PackingSlip() {
                 >
                   <s-option value="none">None</s-option>
                   <s-option value="qr">QR code — opens the customer&apos;s order page</s-option>
-                  <s-option value="qr_number">QR code — order number (warehouse)</s-option>
                   <s-option value="barcode">Barcode — order number (Code 128)</s-option>
                 </s-select>
               </s-stack>

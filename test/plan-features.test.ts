@@ -8,7 +8,7 @@ import {
   planFromBillingName,
   planSlipOptions,
 } from "../app/lib/plans";
-import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, weatherTip, weatherWarnings, type SlipDesign, type SlipOptions } from "../app/lib/slip";
+import { DEFAULT_SLIP_OPTIONS, renderPackingSlips, sanitizeDesign, weatherTip, weatherWarnings, type SlipDesign, type SlipOptions } from "../app/lib/slip";
 import { conditionLabel, slipStrings } from "../app/lib/slip-i18n";
 import { barcodeSvg, code128Values, CODE128_PATTERNS, qrSvg } from "../app/lib/order-code";
 import { sampleSlipData } from "../app/lib/slip-sample";
@@ -142,11 +142,8 @@ describe("slip layout options", () => {
     expect(qr).toContain('class="ocode qr link"');
     expect(qr).toContain('aria-label="QR code https://your-store.example/12345678/orders/');
     expect(qr).toContain("Scan to see your order");
-    // Warehouse QR: just the order number, no caption.
-    const num = render({ orderCode: "qr_number" });
-    expect(num).toContain('class="ocode qr"');
-    expect(num).toContain('aria-label="QR code #1042"');
-    expect(num).not.toContain("Scan to see your order");
+    // The removed order-number QR prints the barcode instead.
+    expect(sanitizeDesign({ ...DEFAULT_SLIP_OPTIONS.design, orderCode: "qr_number" } as never).orderCode).toBe("barcode");
     expect(render({ orderCode: "barcode" })).toContain('class="ocode bc"');
     expect(render()).not.toContain('class="ocode');
   });

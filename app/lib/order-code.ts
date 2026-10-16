@@ -5,10 +5,11 @@ import makeQr from "qrcode-generator";
 
 /**
  * "qr" opens the customer's order status page (what they ordered, tracking)
- * — user decision 2026-10-15; "qr_number" / "barcode" carry the order
- * number for warehouse scanners.
+ * — user decision 2026-10-15; "barcode" carries the order number for
+ * warehouse scanners. (An order-number QR was removed 2026-10-16; saved
+ * designs that chose it print the barcode — see sanitizeDesign.)
  */
-export type OrderCodeKind = "none" | "qr" | "qr_number" | "barcode";
+export type OrderCodeKind = "none" | "qr" | "barcode";
 
 /** QR code for `text` as one SVG path (dark modules), 4-module quiet zone. */
 export function qrSvg(text: string): string {
@@ -77,7 +78,6 @@ export function barcodeSvg(text: string): string {
 export function orderCodeSvg(kind: OrderCodeKind, orderName: string, statusPageUrl?: string | null): string {
   // Only Shopify's own https link; otherwise fall back to the order number.
   if (kind === "qr") return qrSvg(statusPageUrl && /^https:\/\//.test(statusPageUrl) ? statusPageUrl : orderName);
-  if (kind === "qr_number") return qrSvg(orderName);
   if (kind === "barcode") return barcodeSvg(orderName);
   return "";
 }
