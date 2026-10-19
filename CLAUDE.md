@@ -438,7 +438,35 @@ the provider. `WEATHER_PROVIDER` picks one:
 - OpenWeather gives a UTC offset, not an IANA zone: `utcOffsetSec` is kept
   exactly (India +5:30) — `destinationToday()` uses it. Don't round it.
 
-## Hosting: Vercel now, AWS later (user decision, 2026-10-12)
+## Hosting: production on AWS, staging on Vercel (user decision, 2026-10-19)
+
+Branch `prod` → AWS Lightsail container service `weather-slip` (us-east-1,
+next to Neon iad1), deployed by `.github/workflows/deploy-prod.yml` on every
+push to `prod`. Branch `main` → Vercel, which becomes **staging** once the
+cutover is done (`vercel.json` disables Vercel builds of `prod`).
+
+- **Separate AWS account** created for this app (Free plan, credits until
+  2027-04-19 — upgrade to paid before then or the account closes). This
+  machine's `default` AWS profile is a *different* account: always use
+  `AWS_PROFILE=weatherslip`; `scripts/aws/setup.sh` refuses `default` and
+  needs `CONFIRM_ACCOUNT=<id>` before changing anything.
+- One image (`Dockerfile`), two containers in one Lightsail deployment:
+  `web` (`docker-start` = `prisma migrate deploy` + server, health check
+  `/healthz`, no DB query on purpose) and `worker` (`npm run worker`, so
+  `tsx` is a runtime dependency). Off Vercel `runInBackground` just lets
+  the promise run; the worker picks up anything it doesn't finish.
+- Lightsail is x86: build with `--platform linux/amd64` on Apple silicon.
+- Runtime env = SSM SecureStrings under `/weather-slip/prod/`
+  (`scripts/aws/setup.sh env <file>`); the workflow reads them at deploy
+  time. GitHub → AWS via OIDC, role `weather-slip-github-deploy` trusts only
+  `refs/heads/prod` — no AWS keys in GitHub.
+- `.dockerignore` excludes `.env*`; never bake secrets into the image.
+- Cutover order: AWS verified on its own URL → user runs `npx shopify app
+  deploy` with the production `application_url` = AWS domain → only then
+  repoint Vercel to a staging Shopify app + staging Neon DB (until then
+  Vercel's env *is* production).
+
+### Previous setup (Vercel only, 2026-10-12)
 
 - No long-running worker on Vercel. Queue = Postgres table `WeatherJob`,
   claimed with `FOR UPDATE SKIP LOCKED` (`jobs.server.ts`), driven by the

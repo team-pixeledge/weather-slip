@@ -1,3 +1,16 @@
+.git
 .cache
+.react-router
+.shopify
+.vercel
+.agents
+.claude
 build
 node_modules
+extensions/*/dist
+test
+coverage
+# Never bake secrets into the image — production env comes from the
+# Lightsail deployment (see .github/workflows/deploy-prod.yml).
+.env
+.env.*

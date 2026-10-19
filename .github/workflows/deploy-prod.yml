@@ -1,0 +1,98 @@
+# Production deploy: every push to `prod` builds the Docker image and rolls it
+# out to the Lightsail container service. Staging stays on Vercel (`main`).
+# AWS access is via GitHub OIDC — no AWS keys are stored in GitHub. The role
+# (created by scripts/aws/setup.sh) only trusts this repo's `prod` branch.
+name: Deploy production (AWS Lightsail)
+
+on:
+  push:
+    branches: [prod]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  SERVICE: weather-slip
+  # Not a secret. Filled in once the AWS account exists (scripts/aws/setup.sh prints it).
+  DEPLOY_ROLE_ARN: arn:aws:iam::ACCOUNT_ID:role/weather-slip-github-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install lightsailctl
+        run: |
+          sudo curl -fsSL https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl -o /usr/local/bin/lightsailctl
+          sudo chmod +x /usr/local/bin/lightsailctl
+
+      - name: Build image
+        run: docker build --platform linux/amd64 -t "weather-slip:${GITHUB_SHA}" .
+
+      - name: Push image to Lightsail
+        id: push
+        run: |
+          out=$(aws lightsail push-container-image --service-name "$SERVICE" --label app --image "weather-slip:${GITHUB_SHA}")
+          echo "$out"
+          image=$(echo "$out" | grep -o "\":${SERVICE}\.app\.[0-9]*\"" | tail -1 | tr -d '"')
+          test -n "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Create deployment
+        id: deploy
+        env:
+          IMAGE: ${{ steps.push.outputs.image }}
+        run: |
+          # Runtime env = every SSM parameter under /weather-slip/prod/ (name → value).
+          envjson=$(aws ssm get-parameters-by-path --path /weather-slip/prod/ --with-decryption \
+            --query 'Parameters[].{k:Name,v:Value}' --output json \
+            | jq 'map({key: (.k | split("/") | last), value: .v}) | from_entries')
+          test "$(echo "$envjson" | jq 'has("DATABASE_URL") and has("SHOPIFY_API_SECRET")')" = true
+          # web runs migrations on start (docker-start); worker drains the queue.
+          jq -n --arg svc "$SERVICE" --arg img "$IMAGE" --argjson env "$envjson" '{
+            serviceName: $svc,
+            containers: {
+              web:    { image: $img, environment: $env, ports: { "3000": "HTTP" } },
+              worker: { image: $img, environment: $env, command: ["npm", "run", "worker"] }
+            },
+            publicEndpoint: {
+              containerName: "web", containerPort: 3000,
+              healthCheck: { path: "/healthz", intervalSeconds: 10, timeoutSeconds: 5,
+                             healthyThreshold: 2, unhealthyThreshold: 3, successCodes: "200" }
+            }
+          }' > deployment.json
+          version=$(aws lightsail create-container-service-deployment --cli-input-json file://deployment.json \
+            --query 'containerService.nextDeployment.version' --output text)
+          rm deployment.json
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for deployment
+        env:
+          VERSION: ${{ steps.deploy.outputs.version }}
+        run: |
+          for i in $(seq 1 90); do
+            state=$(aws lightsail get-container-service-deployments --service-name "$SERVICE" \
+              --query "deployments[?version==\`${VERSION}\`].state | [0]" --output text)
+            echo "deployment $VERSION: $state"
+            case "$state" in
+              ACTIVE) break ;;
+              FAILED) exit 1 ;;
+            esac
+            sleep 10
+          done
+          test "$state" = ACTIVE
+          url=$(aws lightsail get-container-services --service-name "$SERVICE" --query 'containerServices[0].url' --output text)
+          curl -fsS "${url%/}/healthz"
