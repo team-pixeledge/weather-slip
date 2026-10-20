@@ -20,8 +20,8 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   SERVICE: weather-slip
-  # Not a secret. Filled in once the AWS account exists (scripts/aws/setup.sh prints it).
-  DEPLOY_ROLE_ARN: arn:aws:iam::ACCOUNT_ID:role/weather-slip-github-deploy
+  # Not a secret (AWS account 778977181881, created by scripts/aws/setup.sh).
+  DEPLOY_ROLE_ARN: arn:aws:iam::778977181881:role/weather-slip-github-deploy
 
 jobs:
   deploy:
