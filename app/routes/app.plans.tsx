@@ -862,6 +862,30 @@ export default function Plans() {
               </div>
             </details>
           ))}
+          {/* In-app support contact (App Store requirement). */}
+          <div
+            style={{
+              borderTop: "1px solid #ebebeb",
+              paddingTop: 12,
+              fontSize: 13,
+              color: "#4a4a4a",
+              textAlign: "center",
+              lineHeight: 1.6,
+            }}
+          >
+            <strong style={{ color: "#303030" }}>Need help?</strong> Email{" "}
+            <s-link href="mailto:teampixeledge@gmail.com?subject=Weather%20Slip%20support" target="_blank">
+              teampixeledge@gmail.com
+            </s-link>{" "}
+            — we usually reply within one business day. Step-by-step setup guide:{" "}
+            <s-link href="https://thepixeledge.in/weather-slip/how-to-use/" target="_blank">
+              How to install and use Weather Slip
+            </s-link>
+            {" · "}
+            <s-link href="/privacy" target="_blank">
+              Privacy policy
+            </s-link>
+          </div>
         </div>
       </div>
     </s-page>
