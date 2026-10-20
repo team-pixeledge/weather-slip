@@ -479,6 +479,20 @@ cutover is done (`vercel.json` disables Vercel builds of `prod`).
   the AWS URL. Same `ENCRYPTION_KEY` as Vercel, or stored Storefront tokens
   become unreadable. Change one value: `aws ssm put-parameter --overwrite`,
   then rerun the workflow (env is read at deploy time only).
+- **Errors → Sentry** (org `thepixeledge`, project `weather-slip`,
+  `app/lib/sentry.server.ts`): on only where `SENTRY_DSN` is set (AWS SSM;
+  not Vercel/local). Captured: `handleError` (non-4xx), render errors,
+  `runInBackground` failures, failed queue jobs, worker maintenance/crash,
+  plus Node's unhandled rejections. `beforeSend` strips request
+  bodies/headers/cookies/query strings and user; only HTTP breadcrumbs
+  (query stripped) — keep it that way, slips carry protected customer data.
+  Releases = commit SHA (`SENTRY_RELEASE`, set by the workflow). Alerts:
+  Sentry's default "high priority issue" email + "Email on any new or
+  regressed issue" (workflow API — the old `/rules/` endpoint 404s).
+  The existing SMTP operator alerts (`alerts.server.ts`) still run alongside.
+- **Logs**: `app/lib/logger.server.ts` (pino, JSON to stdout) in the worker
+  and queue runner; the rest still uses `console.*`. Never log names,
+  addresses, phones or emails.
 - Cutover order: AWS verified on its own URL → user runs `npx shopify app
   deploy` with the production `application_url` = AWS domain → only then
   repoint Vercel to a staging Shopify app + staging Neon DB (until then

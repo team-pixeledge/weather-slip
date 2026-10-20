@@ -62,6 +62,8 @@ jobs:
             | jq 'map({key: (.k | split("/") | last), value: .v}) | from_entries')
           test "$(echo "$envjson" | jq 'has("DATABASE_URL") and has("SHOPIFY_API_SECRET")')" = true
           # web runs migrations on start (docker-start); worker drains the queue.
+          # SENTRY_RELEASE tags errors with the deployed commit.
+          envjson=$(echo "$envjson" | jq --arg rel "$GITHUB_SHA" '. + {SENTRY_RELEASE: $rel}')
           jq -n --arg svc "$SERVICE" --arg img "$IMAGE" --argjson env "$envjson" '{
             serviceName: $svc,
             containers: {

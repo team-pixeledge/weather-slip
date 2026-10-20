@@ -1,4 +1,5 @@
 import { waitUntil } from "@vercel/functions";
+import { captureError } from "./sentry.server";
 
 /**
  * Run work after the response has been sent. On Vercel (staging) this keeps
@@ -10,6 +11,7 @@ import { waitUntil } from "@vercel/functions";
 export function runInBackground(task: Promise<unknown>): void {
   const guarded = task.catch((err) => {
     console.error("[background]", err instanceof Error ? err.message : err);
+    captureError(err, { where: "background" });
   });
   if (process.env.VERCEL) waitUntil(guarded);
 }

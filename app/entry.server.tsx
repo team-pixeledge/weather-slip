@@ -6,6 +6,9 @@ import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { notifyAdminLater } from "./lib/alerts.server";
+import { captureError, initSentry } from "./lib/sentry.server";
+
+initSentry("web");
 
 /**
  * Unexpected errors from any loader/action/render → operator alert
@@ -36,6 +39,7 @@ export function handleError(error: unknown, { request }: { request: Request }) {
           ? safeJson(error)
           : String(error);
   const path = new URL(request.url).pathname;
+  captureError(error, { path, method: request.method });
   notifyAdminLater(
     `server-error:${path}:${msg.slice(0, 80)}`,
     `Server error on ${path}`,
@@ -83,6 +87,7 @@ export default async function handleRequest(
         onError(error) {
           responseStatusCode = 500;
           console.error(error);
+          captureError(error, { path: new URL(request.url).pathname, phase: "render" });
         },
       }
     );
