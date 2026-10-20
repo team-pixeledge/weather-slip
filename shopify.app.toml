@@ -9,7 +9,7 @@
 # Partner Dashboard's current state (it dropped every webhook, the comments
 # and automatically_update_urls_on_dev=false the first time, 2026-10-12).
 # After any link, `git diff` this file and restore before deploying.
-name = "Weather-Slip"
+name = "Weather Slip"
 client_id = "dccbe8c9a0ab78e67bc78132e8466d36"
 application_url = "https://weatherslip.thepixeledge.in"
 embedded = true

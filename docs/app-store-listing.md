@@ -43,6 +43,23 @@ Wording rules for this listing (and any ad copy):
    Dashboard.
 7. Vercel upgraded to Pro if staging is ever used commercially (Hobby is
    non-commercial); production itself runs on AWS.
+8. Same app name everywhere: `name = "Weather Slip"` in `shopify.app.toml`
+   and the listing (Shopify checks they match).
+9. App Store review page → **Run automated checks**; all must pass.
+10. Protected customer data request submitted from the review page *before*
+    submitting (it can't be requested while the app is under review).
+11. `noreply@shopify.com` allow-listed in the submission contact inbox;
+    answer reviewer emails promptly (repeat non-answers → suspension).
+12. API contact email and emergency contact (email + phone) set; no
+    "Shopify" in any app domain or contact email.
+13. No pricing, reviews or PII in screenshots; screencast in English showing
+    the expected outcome of every review step.
+
+Verified on production 2026-10-20: install/uninstall/reinstall, signed GDPR
+webhooks 200 / forged 401, all other webhooks 401 when forged, embedded CSP
+frame-ancestors, TLS (valid to 2027-05), privacy page, 50-order bulk print
+in ~6 s, plan change, Sentry + alert email. `/auth/login` no longer asks for
+a shop domain (App Store rule).
 
 ## Basic app information
 
