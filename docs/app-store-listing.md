@@ -172,5 +172,6 @@ email at 80% and 100%.
 >
 > **Contact:** teampixeledge@gmail.com
 
-Screencast: record install → plan → create order → print → reprint (same
-forecast) → Packing slip settings → Print from Shopify's Orders page.
+Screencast (submitted): https://youtu.be/zidfcZYEUAI (YouTube, unlisted, 7:25,
+chaptered) — install → test order → packing slip → plan → print → upgrade →
+print from Shopify's order page → Shopify packing slip snippet.
