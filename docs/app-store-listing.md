@@ -35,8 +35,8 @@ Wording rules for this listing (and any ad copy):
    Phone (not Email), Store management + App functionality.
 3. Installed and tested on a development store from the production app
    (the review steps below, end to end).
-4. Privacy policy published at a public URL (see Support & links) — a hard
-   requirement; the listing can't be submitted without it.
+4. Privacy policy: https://weatherslip.thepixeledge.in/privacy (published
+   2026-10-20; confirm the contact email on it).
 5. App icon uploaded (`brand/icon-1200.png`), 3–6 screenshots, optional
    screencast.
 6. Emergency developer contact and support email set in the Partner
@@ -118,7 +118,7 @@ email at 80% and 100%.
 | Field | Value |
 |---|---|
 | Support email | teampixeledge@gmail.com (confirm) |
-| Privacy policy URL | **TODO — required before submitting** (must describe: order city/country, ~11 km location and forecast stored; name, address, phone read only at print time and never stored; deletion on customers/redact and shop/redact) |
+| Privacy policy URL | https://weatherslip.thepixeledge.in/privacy (`app/routes/privacy.tsx` — keep it in step with what the app stores) |
 | Terms / merchant agreement | **TODO** (the protected customer data form already answers "yes" to merchant data-protection agreements) |
 | Documentation / setup guide | TODO (or point to the in-app "How to use" + FAQ on the Plans page) |
 
