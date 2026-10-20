@@ -22,6 +22,9 @@ export function initSentry(component: "web" | "worker"): void {
     includeLocalVariables: false,
     tracesSampleRate: 0,
     initialScope: { tags: { component } },
+    // A browser that navigates away mid-render breaks the response stream;
+    // nothing failed on our side (React's onShellReady → pipe). Not an error.
+    ignoreErrors: ["The destination stream errored while writing data"],
     beforeSend(event) {
       if (event.request) {
         delete event.request.data;
