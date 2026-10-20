@@ -1,7 +1,13 @@
 # App Store listing — Weather Slip
 
 Copy for the Partner Dashboard → Distribution → App Store listing (English).
-Written from the app's real behaviour and `app/lib/plans.ts` (2026-10-14).
+Written from the app's real behaviour and `app/lib/plans.ts` (2026-10-14,
+rechecked 2026-10-20).
+
+**Submit from the production app only:** Partner app **Weather-Slip**
+(client_id `dccbe8c9a0ab78e67bc78132e8466d36`, `shopify.app.toml`,
+https://weatherslip.thepixeledge.in). Weather-Slip-Staging is for testing
+and is never listed.
 If plans, limits or features change, update **Pricing** and the feature
 lines here and in the listing — a listing that doesn't match the app is a
 common rejection reason.
@@ -20,6 +26,23 @@ Wording rules for this listing (and any ad copy):
   prints it on every slip and in the Shopify snippet; the listing and FAQ
   name it too).
 - Distance is a straight line, not a route distance.
+
+## Before submitting (checklist)
+
+1. `npx shopify app deploy --config shopify.app.toml` released on the
+   production app (URLs, webhooks, scopes, print/Flow extensions).
+2. Protected customer data declared on the production app: Name, Address,
+   Phone (not Email), Store management + App functionality.
+3. Installed and tested on a development store from the production app
+   (the review steps below, end to end).
+4. Privacy policy published at a public URL (see Support & links) — a hard
+   requirement; the listing can't be submitted without it.
+5. App icon uploaded (`brand/icon-1200.png`), 3–6 screenshots, optional
+   screencast.
+6. Emergency developer contact and support email set in the Partner
+   Dashboard.
+7. Vercel upgraded to Pro if staging is ever used commercially (Hobby is
+   non-commercial); production itself runs on AWS.
 
 ## Basic app information
 
@@ -47,7 +70,7 @@ Wording rules for this listing (and any ad copy):
 2. Rain, frost and heat warnings for dispatch and delivery day
 3. 4 templates incl. a 4×6 / 4×4 shipping label, with your logo and colours
 4. Print one slip or many, from the app or from Shopify's Orders page
-5. Slips in 7 languages, a QR code or barcode, and distance to the customer
+5. Slips in 7 languages, an order barcode, and distance to the customer
 
 **Search terms** (up to 5)
 
@@ -101,8 +124,9 @@ email at 80% and 100%.
 
 ## Data and permissions (for the listing's data section and the reviewer)
 
-- **Protected customer data (Level 2):** Name, Address, Phone — declared
-  2026-10-12 for Store management + App functionality. Read from Shopify
+- **Protected customer data (Level 2):** Name, Address, Phone, for Store
+  management + App functionality. Declared 2026-10-12 on the old app (now
+  Weather-Slip-Staging); **must be declared again on the production app**. Read from Shopify
   only while rendering a print and never stored. Email is **not** declared
   (see the open question in the hand-off).
 - **Stored per printed order:** city, country code, a location rounded to
