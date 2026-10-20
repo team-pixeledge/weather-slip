@@ -493,6 +493,11 @@ cutover is done (`vercel.json` disables Vercel builds of `prod`).
 - **Logs**: `app/lib/logger.server.ts` (pino, JSON to stdout) in the worker
   and queue runner; the rest still uses `console.*`. Never log names,
   addresses, phones or emails.
+- **Two Shopify apps** since 2026-10-20: production "Weather Slip" =
+  `shopify.app.toml` (default — `npx shopify app deploy` with no flag);
+  staging "Weather-Slip-Staging" = `shopify.app.staging.toml`
+  (`--config staging`). CLI 4.9 treats `--config` as a *name*:
+  `--config shopify.app.toml` looks for `shopify.app.shopifyapptoml.toml`.
 - Cutover order: AWS verified on its own URL → user runs `npx shopify app
   deploy` with the production `application_url` = AWS domain → only then
   repoint Vercel to a staging Shopify app + staging Neon DB (until then

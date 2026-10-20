@@ -29,7 +29,7 @@ Wording rules for this listing (and any ad copy):
 
 ## Before submitting (checklist)
 
-1. `npx shopify app deploy --config shopify.app.toml` released on the
+1. `npx shopify app deploy` (no `--config`: `shopify.app.toml` is the default; staging is `--config staging`) released on the
    production app (URLs, webhooks, scopes, print/Flow extensions).
 2. Protected customer data declared on the production app: Name, Address,
    Phone (not Email), Store management + App functionality.

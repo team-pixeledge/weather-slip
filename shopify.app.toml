@@ -1,6 +1,6 @@
 # PRODUCTION app config (Partner app "Weather-Slip", created 2026-10-20).
 # Hosted on AWS Lightsail from the `prod` branch, own Neon DB
-# (weather-slip-prod). Deploy: npx shopify app deploy --config shopify.app.toml
+# (weather-slip-prod). Deploy: npx shopify app deploy (no --config: this file is the default)
 #
 # Staging is a separate app (shopify.app.staging.toml) — never share one
 # client_id between environments.

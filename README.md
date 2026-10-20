@@ -146,8 +146,8 @@ databases are real.
 Shopify config, scopes, webhooks and extensions are released separately:
 
 ```bash
-npx shopify app deploy --config shopify.app.toml           # production app
-npx shopify app deploy --config shopify.app.staging.toml   # staging app
+npx shopify app deploy                    # production app (shopify.app.toml is the default)
+npx shopify app deploy --config staging   # staging app (shopify.app.staging.toml)
 ```
 
 **Staging (Vercel):** push to `main`. Vercel builds with `npm run vercel-build`, which runs the migrations, and skips the `prod` branch.
