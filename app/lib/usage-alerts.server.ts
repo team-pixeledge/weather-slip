@@ -4,6 +4,7 @@ import { PLANS } from "./plans";
 import { usageSummary } from "./shop.server";
 import { plansUrl, usageEmail, usageLevel } from "./usage-alerts";
 import { unauthenticated } from "../shopify.server";
+import { captureError } from "./sentry.server";
 
 // Email the shop owner when they reach 80% and then 100% of the month's
 // orders. Each level goes out once per usage period; the level resets with
@@ -54,5 +55,6 @@ export async function notifyUsageIfNeeded(shopDomain: string): Promise<void> {
     await sendMerchantEmail(owner.email, subject, text);
   } catch (err) {
     console.error("[usage-alert]", err instanceof Error ? err.message : err);
+    captureError(err, { where: "usage-alert-email", shop: shopDomain });
   }
 }

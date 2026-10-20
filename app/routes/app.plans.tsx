@@ -36,6 +36,7 @@ import {
 } from "../lib/shop.server";
 import { UsageBanner } from "../components/UsageBanner";
 import { notifyAdmin } from "../lib/alerts.server";
+import { captureError } from "../lib/sentry.server";
 
 // Plans & pricing — also the app's usage overview (the old Overview page was
 // merged in here). Layout follows store-performance-monitor's select-plan.
@@ -164,6 +165,7 @@ export const action = async ({
       "[plans] plan change failed",
       err instanceof Error ? err.message : err,
     );
+    captureError(err, { where: "plan-change", shop: session.shop, target, interval });
     await notifyAdmin(
       "billing-failed",
       "A plan change failed",

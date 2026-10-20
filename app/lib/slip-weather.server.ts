@@ -12,6 +12,7 @@ import { parseSavedSlipWeather, slipForecast, type SlipWeather } from "./slip";
 import { destinationToday } from "./snapshot";
 import { cachedForecast, cachedGeocode } from "./weather/cache.server";
 import type { ForecastPayload, GeoPoint } from "./weather/types";
+import { captureError } from "./sentry.server";
 
 const SAVE_FORECASTS = `#graphql
   mutation WeatherSlipSaveForecast($metafields: [MetafieldsSetInput!]!) {
@@ -43,6 +44,7 @@ async function saveForecasts(admin: GraphqlClient, fresh: [string, SlipWeather][
       if (errs.length) console.warn("[slip-weather] save:", errs.map((e) => e.message).join("; "));
     } catch (err) {
       console.warn("[slip-weather] save failed:", err instanceof Error ? err.message : err);
+      captureError(err, { where: "save-forecast-metafield", orders: fresh.length });
     }
   }
 }

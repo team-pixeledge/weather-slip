@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import prisma from "../db.server";
+import { captureError } from "./sentry.server";
 
 // Operator alerts: email the app's owner when something breaks — weather
 // API failing or running out of free calls, the queue stalling, prints or
@@ -46,6 +47,7 @@ export async function sendAlertEmail(subject: string, text: string): Promise<boo
     return true;
   } catch (err) {
     console.error("[alert] email failed:", err instanceof Error ? err.message : err);
+    captureError(err, { where: "alert-email" });
     return false;
   }
 }
@@ -62,6 +64,7 @@ export async function sendMerchantEmail(to: string, subject: string, text: strin
     return true;
   } catch (err) {
     console.error("[merchant-email] failed:", err instanceof Error ? err.message : err);
+    captureError(err, { where: "merchant-email" });
     return false;
   }
 }
@@ -98,6 +101,7 @@ export async function notifyAdmin(
     await sendAlertEmail(subject, details + repeats);
   } catch (err) {
     console.error("[alert] notify failed:", key, err instanceof Error ? err.message : err);
+    captureError(err, { where: "alert-notify" });
   }
 }
 

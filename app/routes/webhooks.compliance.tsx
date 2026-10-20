@@ -8,6 +8,7 @@ import {
   METAFIELD_SUMMARY_KEY,
 } from "../lib/constants";
 import { authenticate, unauthenticated } from "../shopify.server";
+import { captureError } from "../lib/sentry.server";
 
 // Mandatory GDPR topics. What we hold per order: city, country code, a
 // rounded (~11 km) coordinate and the weather — no name, street, email or
@@ -45,6 +46,7 @@ async function deleteOrderMetafields(shop: string, orderIds: string[]) {
       if (errs.length) console.warn("[gdpr] metafieldsDelete:", errs.map((e) => e.message).join("; "));
     } catch (err) {
       console.warn("[gdpr] metafieldsDelete failed:", err instanceof Error ? err.message : err);
+      captureError(err, { where: "gdpr-metafields-delete", shop });
     }
   }
 }

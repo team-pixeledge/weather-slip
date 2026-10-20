@@ -8,6 +8,7 @@ import { OpenWeatherProvider } from "./weather/openweather.server";
 import type { WeatherProvider } from "./weather/types";
 import { runInBackground } from "./background.server";
 import { notifyAdminLater, OPENWEATHER_FREE_MONTHLY, recordApiCall } from "./alerts.server";
+import { captureError } from "./sentry.server";
 
 /** Count every OpenWeather call and alert the operator on failures. */
 function watchOpenWeather(path: string, status: number | "timeout") {
@@ -236,6 +237,7 @@ export async function recordPrints(shop: string, orderIds: string[], now = new D
         "lastPrintedAt" = EXCLUDED."lastPrintedAt"`;
   } catch (err) {
     console.error("[printed] record failed:", err instanceof Error ? err.message : err);
+    captureError(err, { where: "record-prints", shop });
   }
 }
 
