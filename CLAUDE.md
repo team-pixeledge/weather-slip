@@ -461,6 +461,24 @@ cutover is done (`vercel.json` disables Vercel builds of `prod`).
   time. GitHub → AWS via OIDC, role `weather-slip-github-deploy` trusts only
   `refs/heads/prod` — no AWS keys in GitHub.
 - `.dockerignore` excludes `.env*`; never bake secrets into the image.
+- **Live on AWS 2026-10-20** (deployment 1, first green run 39377499510):
+  https://weatherslip.thepixeledge.in (Lightsail cert
+  `weatherslip-thepixeledge-in`; DNS at GoDaddy: CNAME `weatherslip` →
+  weather-slip.smmgt6fkbkn66.us-east-1.cs.amazonlightsail.com, plus the ACM
+  validation CNAME — keep it, renewal needs it) —
+  `/healthz` 200, cron 401 without secret, forged webhook 401, migrations
+  "No pending". Runs against the same Neon production DB as Vercel; not yet
+  the Shopify `application_url` (cutover pending).
+- Gotchas hit: a new (Free plan) account has a Lightsail container-service
+  limit of 0 — raised via a Support case (Service limit increase → General).
+  GitHub sends this repo's OIDC `sub` in immutable-ID form
+  (`repo:team-pixeledge@171891557/weather-slip@1415235656:…`), so a trust
+  policy on the plain `owner/repo` name is rejected.
+- SSM env was copied from Vercel production (app keys only — never `VERCEL`,
+  which switches `runInBackground` to `waitUntil`) with `SHOPIFY_APP_URL` =
+  the AWS URL. Same `ENCRYPTION_KEY` as Vercel, or stored Storefront tokens
+  become unreadable. Change one value: `aws ssm put-parameter --overwrite`,
+  then rerun the workflow (env is read at deploy time only).
 - Cutover order: AWS verified on its own URL → user runs `npx shopify app
   deploy` with the production `application_url` = AWS domain → only then
   repoint Vercel to a staging Shopify app + staging Neon DB (until then
