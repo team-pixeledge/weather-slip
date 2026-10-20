@@ -3,7 +3,7 @@ import prisma from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { runInBackground } from "./background.server";
 import { MAX_PRINT_ORDERS } from "./order-views";
-import { ordersToPrint } from "./orders.server";
+import { addStatusPageUrls, ordersToPrint } from "./orders.server";
 import { verifyPrintToken } from "./print-token.server";
 import { notifyAdmin } from "./alerts.server";
 import { drainQueue } from "./queue-runner.server";
@@ -160,6 +160,7 @@ async function renderPrint(
     const slip = planSlipOptions(saved, shop.plan, shop.skipWeekends);
     const brandLogo = slip.design.logoSource === "store" ? await brandLogoIfFresh(admin, shop) : null;
     slip.design = resolveLogo(slip.design, brandLogo);
+    if (slip.design.orderCode === "qr") await addStatusPageUrls(admin, orders);
     const distance = slip.design.showDistance
       ? await distancesForSlips(shop, orders, admin, slip.design.distanceFrom)
       : undefined;

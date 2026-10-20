@@ -235,7 +235,6 @@ const PRINT_QUERY = `#graphql
           name company address1 address2 city province zip country phone
         }
         fulfillments(first: 5) { createdAt estimatedDeliveryAt }
-        statusPageUrl
         savedForecast: metafield(namespace: "weather_slip", key: "forecast") { value }
         customAttributes { key value }
         currencyCode
@@ -347,6 +346,32 @@ export interface PrintShop {
 }
 
 /** Orders in the order the IDs were given (the merchant's selection order). */
+// statusPageUrl is non-null and protected: while the app lacks customer-data
+// approval, Shopify can't return it, and a denied non-null field nulls the
+// whole order — every print then said "orders weren't found" (hit on the new
+// production app, 2026-10-20). So it's fetched separately, only for slips
+// with the status-page QR, and a denial only drops the QR back to the order
+// number.
+const STATUS_URL_QUERY = `#graphql
+  query OrderStatusUrls($ids: [ID!]!) {
+    nodes(ids: $ids) { ... on Order { id statusPageUrl } }
+  }`;
+
+/** Adds statusPageUrl to the orders that Shopify will give it for; best effort. */
+export async function addStatusPageUrls(admin: GraphqlClient, orders: PrintOrder[]): Promise<void> {
+  try {
+    const data = await query<{ nodes: ({ id: string; statusPageUrl: string } | null)[] }>(
+      admin,
+      STATUS_URL_QUERY,
+      { ids: orders.map((o) => o.id) },
+    );
+    const byId = new Map(data.nodes.filter((n) => n?.statusPageUrl).map((n) => [n!.id, n!.statusPageUrl]));
+    for (const o of orders) o.statusPageUrl = byId.get(o.id) ?? null;
+  } catch (err) {
+    console.warn("[orders] status page URLs unavailable:", err instanceof Error ? err.message : err);
+  }
+}
+
 export async function ordersToPrint(admin: GraphqlClient, orderIds: string[]) {
   const ids = orderIds.slice(0, MAX_PRINT_ORDERS).map((id) => `gid://shopify/Order/${id}`);
   const data = await query<{ shop: PrintShop; nodes: (PrintOrder | null)[] }>(
