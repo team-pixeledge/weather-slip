@@ -3,6 +3,7 @@ import { haversineKm, type LatLon, type SlipDistance } from "./distance";
 import { query, type GraphqlClient, type PrintOrder } from "./orders.server";
 import { providerFor } from "./shop.server";
 import { cachedGeocode } from "./weather/cache.server";
+import { mapLimit, PRINT_CONCURRENCY } from "./concurrency";
 
 // Worked out at print time from the order's *current* fulfillment location
 // and shipping address, so moving an order to another location (or editing
@@ -165,27 +166,25 @@ export async function distancesForSlips(
   );
 
   const out = new Map<string, SlipDistance[]>();
-  await Promise.all(
-    orders.map(async (order) => {
-      const id = numericId(order.id);
-      const a = order.shippingAddress;
-      const dest = a
-        ? await pointOf({ city: a.city ?? null, zip: a.zip ?? null, countryCode: a.countryCodeV2 ?? null, lat: a.latitude ?? null, lon: a.longitude ?? null })
-        : null;
-      if (!dest) {
-        out.set(id, [{ status: "unavailable", reason: "no_destination" }]);
-        return;
-      }
-      let origins = fixed ? [fixed] : orderOrigins(fosBy.get(id));
-      if (!origins.length && storePlace) origins = [storePlace];
-      const list: SlipDistance[] = [];
-      for (const o of origins) {
-        const p = await pointOf(o);
-        if (p) list.push({ status: "ok", km: haversineKm(p, dest), from: [o.city, o.countryCode].filter(Boolean).join(", ") });
-      }
-      out.set(id, list.length ? list : [{ status: "unavailable", reason: "no_origin" }]);
-    }),
-  );
+  await mapLimit(orders, PRINT_CONCURRENCY, async (order) => {
+    const id = numericId(order.id);
+    const a = order.shippingAddress;
+    const dest = a
+      ? await pointOf({ city: a.city ?? null, zip: a.zip ?? null, countryCode: a.countryCodeV2 ?? null, lat: a.latitude ?? null, lon: a.longitude ?? null })
+      : null;
+    if (!dest) {
+      out.set(id, [{ status: "unavailable", reason: "no_destination" }]);
+      return;
+    }
+    let origins = fixed ? [fixed] : orderOrigins(fosBy.get(id));
+    if (!origins.length && storePlace) origins = [storePlace];
+    const list: SlipDistance[] = [];
+    for (const o of origins) {
+      const p = await pointOf(o);
+      if (p) list.push({ status: "ok", km: haversineKm(p, dest), from: [o.city, o.countryCode].filter(Boolean).join(", ") });
+    }
+    out.set(id, list.length ? list : [{ status: "unavailable", reason: "no_origin" }]);
+  });
   return out;
 }
 

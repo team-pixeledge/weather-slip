@@ -13,6 +13,7 @@ import { destinationToday } from "./snapshot";
 import { cachedForecast, cachedGeocode } from "./weather/cache.server";
 import type { ForecastPayload, GeoPoint } from "./weather/types";
 import { captureError } from "./sentry.server";
+import { mapLimit, PRINT_CONCURRENCY } from "./concurrency";
 
 const SAVE_FORECASTS = `#graphql
   mutation WeatherSlipSaveForecast($metafields: [MetafieldsSetInput!]!) {
@@ -104,91 +105,89 @@ export async function weatherForSlips(
   const out = new Map<string, SlipWeather>();
   const fresh: [string, SlipWeather][] = [];
 
-  await Promise.all(
-    orders.map(async (order, i) => {
-      const id = ids[i]!;
-      const computed = orderShippingDates(order, shop, now);
-      // Printed before: reuse the forecast saved on the order — unless the
-      // order hasn't shipped and its dispatch day has passed (user decision
-      // 2026-10-15). Then the dates roll forward to today and the forecast
-      // is fetched again for the new days; once fulfilled, the real ship
-      // date is used and nothing moves again.
-      const unshipped = order.fulfillments.length === 0;
-      const today = localDate(now, shop.timezone);
-      const missed = (d: string | null | undefined) => unshipped && d != null && d < today;
-      const saved = parseSavedSlipWeather(order.savedForecast?.value);
-      const rolled = saved ? missed(saved.dispatch) : false;
-      if (saved && !rolled) {
-        // No weather API call, but a reprint is still a print.
-        out.set(
-          id,
-          (await take(id))
-            ? saved
-            : {
-                status: "limit_reached",
-                city: saved.city,
-                countryCode: saved.countryCode,
-                dispatch: saved.dispatch,
-                delivery: saved.delivery,
-              },
+  await mapLimit(orders, PRINT_CONCURRENCY, async (order, i) => {
+    const id = ids[i]!;
+    const computed = orderShippingDates(order, shop, now);
+    // Printed before: reuse the forecast saved on the order — unless the
+    // order hasn't shipped and its dispatch day has passed (user decision
+    // 2026-10-15). Then the dates roll forward to today and the forecast
+    // is fetched again for the new days; once fulfilled, the real ship
+    // date is used and nothing moves again.
+    const unshipped = order.fulfillments.length === 0;
+    const today = localDate(now, shop.timezone);
+    const missed = (d: string | null | undefined) => unshipped && d != null && d < today;
+    const saved = parseSavedSlipWeather(order.savedForecast?.value);
+    const rolled = saved ? missed(saved.dispatch) : false;
+    if (saved && !rolled) {
+      // No weather API call, but a reprint is still a print.
+      out.set(
+        id,
+        (await take(id))
+          ? saved
+          : {
+              status: "limit_reached",
+              city: saved.city,
+              countryCode: saved.countryCode,
+              dispatch: saved.dispatch,
+              delivery: saved.delivery,
+            },
+      );
+      return;
+    }
+    const snap = snapBy.get(id);
+    // Keep the dates the saved snapshot used, so slip and metafield agree —
+    // unless they're a missed dispatch day; the REFRESH below moves the
+    // metafield along with the slip.
+    const stale = rolled || missed(snap?.dispatchDate);
+    const dispatch = (!stale && snap?.dispatchDate) || computed.dispatch;
+    const delivery = (!stale && snap?.deliveryDate) || computed.delivery;
+    const a = order.shippingAddress;
+    const place = { city: a?.city ?? null, countryCode: a?.countryCodeV2 ?? null };
+
+    try {
+      let point: GeoPoint | null =
+        a?.latitude != null && a?.longitude != null ? { lat: a.latitude, lon: a.longitude } : null;
+      if (!point && a && (a.city || a.zip)) {
+        point = await cachedGeocode(
+          provider,
+          { city: a.city ?? "", zip: a.zip, countryCode: a.countryCodeV2 },
+          now,
         );
+      }
+      if (!point) {
+        out.set(id, { status: "no_location", ...place, dispatch, delivery });
         return;
       }
-      const snap = snapBy.get(id);
-      // Keep the dates the saved snapshot used, so slip and metafield agree —
-      // unless they're a missed dispatch day; the REFRESH below moves the
-      // metafield along with the slip.
-      const stale = rolled || missed(snap?.dispatchDate);
-      const dispatch = (!stale && snap?.dispatchDate) || computed.dispatch;
-      const delivery = (!stale && snap?.deliveryDate) || computed.delivery;
-      const a = order.shippingAddress;
-      const place = { city: a?.city ?? null, countryCode: a?.countryCodeV2 ?? null };
-
-      try {
-        let point: GeoPoint | null =
-          a?.latitude != null && a?.longitude != null ? { lat: a.latitude, lon: a.longitude } : null;
-        if (!point && a && (a.city || a.zip)) {
-          point = await cachedGeocode(
-            provider,
-            { city: a.city ?? "", zip: a.zip, countryCode: a.countryCodeV2 },
-            now,
-          );
-        }
-        if (!point) {
-          out.set(id, { status: "no_location", ...place, dispatch, delivery });
-          return;
-        }
-        if (!(await take(id))) {
-          out.set(id, { status: "limit_reached", ...place, dispatch, delivery });
-          return;
-        }
-        if (stale || (snap?.status !== "OK" && snap?.status !== "PENDING_DATES")) {
-          // Listed above, so the job may run (jobs never charge).
-          await enqueue(shop.shop, id, snap ? "REFRESH" : "CREATE");
-        }
-        const forecast = await forecastFor(point);
-        const w: SlipWeather = {
-          status: "ok",
-          ...place,
-          dispatch,
-          delivery,
-          ...slipForecast(forecast, destinationToday(forecast, now), provider.horizonDays),
-          asOf: now.toISOString(),
-          source: provider.id,
-        };
-        out.set(id, w);
-        fresh.push([id, w]);
-      } catch (err) {
-        console.error("[slip-weather]", id, err instanceof Error ? err.message : err);
-        notifyAdminLater(
-          "slip-weather-failed",
-          "Slips are printing without weather",
-          `Weather lookup failed while printing order ${id} on ${shop.shop}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        out.set(id, { status: "error", ...place, dispatch, delivery });
+      if (!(await take(id))) {
+        out.set(id, { status: "limit_reached", ...place, dispatch, delivery });
+        return;
       }
-    }),
-  );
+      if (stale || (snap?.status !== "OK" && snap?.status !== "PENDING_DATES")) {
+        // Listed above, so the job may run (jobs never charge).
+        await enqueue(shop.shop, id, snap ? "REFRESH" : "CREATE");
+      }
+      const forecast = await forecastFor(point);
+      const w: SlipWeather = {
+        status: "ok",
+        ...place,
+        dispatch,
+        delivery,
+        ...slipForecast(forecast, destinationToday(forecast, now), provider.horizonDays),
+        asOf: now.toISOString(),
+        source: provider.id,
+      };
+      out.set(id, w);
+      fresh.push([id, w]);
+    } catch (err) {
+      console.error("[slip-weather]", id, err instanceof Error ? err.message : err);
+      notifyAdminLater(
+        "slip-weather-failed",
+        "Slips are printing without weather",
+        `Weather lookup failed while printing order ${id} on ${shop.shop}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      out.set(id, { status: "error", ...place, dispatch, delivery });
+    }
+  });
   if (fresh.length) await saveForecasts(admin, fresh);
   return out;
 }
