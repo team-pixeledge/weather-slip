@@ -15,7 +15,10 @@ set -euo pipefail
 REGION=us-east-1
 SERVICE=weather-slip
 POWER=${POWER:-micro}
-REPO=team-pixeledge/weather-slip
+# GitHub sends the repo in its immutable-ID form in the OIDC `sub` claim
+# (gh api repos/team-pixeledge/weather-slip/actions/oidc/customization/sub),
+# so the plain owner/repo name never matches.
+REPO_SUB=repo:team-pixeledge@171891557/weather-slip@1415235656
 ROLE=weather-slip-github-deploy
 PREFIX=/weather-slip/prod
 export AWS_REGION=$REGION
@@ -56,7 +59,7 @@ infra() {
  "Principal":{"Federated":"$oidc_arn"},
  "Action":"sts:AssumeRoleWithWebIdentity",
  "Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com",
-   "token.actions.githubusercontent.com:sub":"repo:$REPO:ref:refs/heads/prod"}}}]}
+   "token.actions.githubusercontent.com:sub":"$REPO_SUB:ref:refs/heads/prod"}}}]}
 JSON
 )
   if aws iam get-role --role-name "$ROLE" >/dev/null 2>&1; then
