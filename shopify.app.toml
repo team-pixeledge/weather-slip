@@ -1,15 +1,17 @@
-# PRODUCTION app config (Partner app "Weather-Slip", linked 2026-10-12).
-# Add a shopify.app.staging.toml (separate app + client_id) before launch —
-# never share one client_id between environments (store-performance-monitor
-# did, and `shopify app dev` overwrote its production URLs).
+# PRODUCTION app config (Partner app "Weather-Slip", created 2026-10-20).
+# Hosted on AWS Lightsail from the `prod` branch, own Neon DB
+# (weather-slip-prod). Deploy: npx shopify app deploy --config shopify.app.toml
 #
-# WARNING: `shopify app config link` rewrites this whole file from the
-# Partner Dashboard's current state — it dropped every webhook, the comments
-# and automatically_update_urls_on_dev=false the first time (2026-10-12).
+# Staging is a separate app (shopify.app.staging.toml) — never share one
+# client_id between environments.
+#
+# WARNING: `shopify app config link` rewrites the whole file from the
+# Partner Dashboard's current state (it dropped every webhook, the comments
+# and automatically_update_urls_on_dev=false the first time, 2026-10-12).
 # After any link, `git diff` this file and restore before deploying.
 name = "Weather-Slip"
-client_id = "2f466274942e288153d61965b235f987"
-application_url = "https://weather-slip.vercel.app"
+client_id = "dccbe8c9a0ab78e67bc78132e8466d36"
+application_url = "https://weatherslip.thepixeledge.in"
 embedded = true
 
 [build]
@@ -29,7 +31,8 @@ automatically_update_urls_on_dev = false
 # read_all_orders (NOT YET ADDED): lets the Orders page list orders older
 #   than 60 days. Shopify rejects a deploy with it until access is approved
 #   in the Partner Dashboard (API access requests → Read all orders). Once
-#   approved: add it here, deploy, then add it to Vercel's SCOPES env.
+#   approved: add it here, deploy, then add it to the SCOPES env
+#   (AWS SSM /weather-slip/prod/SCOPES, read at deploy time).
 # unauthenticated_read_content: lets the app create its own Storefront
 #   token to read the store logo (Settings → Brand) for packing slips — the
 #   Admin API doesn't expose it. No customer data.
@@ -45,7 +48,7 @@ automatically_update_urls_on_dev = false
 scopes = "read_orders,write_orders,unauthenticated_read_content,read_products,read_themes,read_files,read_locations,read_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders"
 
 [auth]
-redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]
+redirect_urls = ["https://weatherslip.thepixeledge.in/auth/callback"]
 
 [webhooks]
 api_version = "2026-10"

@@ -1,0 +1,78 @@
+# STAGING app config (Partner app "Weather-Slip-Staging", client_id below —
+# the original app, renamed 2026-10-20). Hosted on Vercel from `main`, with
+# its own Neon DB. Deploy: npx shopify app deploy --config staging
+#
+# Production is a separate app (shopify.app.toml) — never share one
+# client_id between environments.
+#
+# WARNING: `shopify app config link` rewrites the whole file from the
+# Partner Dashboard's current state (it dropped every webhook, the comments
+# and automatically_update_urls_on_dev=false the first time, 2026-10-12).
+# After any link, `git diff` this file and restore before deploying.
+name = "Weather-Slip-Staging"
+client_id = "2f466274942e288153d61965b235f987"
+application_url = "https://weather-slip.vercel.app"
+embedded = true
+
+[build]
+# Must stay false: true lets `shopify app dev` silently replace the
+# production application_url with a throwaway tunnel for as long as the dev
+# session runs. Flip locally if you need it, never commit it as true.
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+# read_orders: order date, fulfillments and the shipping address's
+#   city/zip/country/coordinates for weather; the printed packing slips also
+#   show name, street address and phone (Level 2 protected customer data —
+#   request name, address and phone in the Partner Dashboard, never email).
+# write_orders: metafieldsSet on Order needs it.
+# Shopify grants what's listed here, not what auth.begin asks for — a scope
+# change does nothing until `shopify app deploy` pushes this file.
+# read_all_orders (NOT YET ADDED): lets the Orders page list orders older
+#   than 60 days. Shopify rejects a deploy with it until access is approved
+#   in the Partner Dashboard (API access requests → Read all orders). Once
+#   approved: add it here, deploy, then add it to Vercel's SCOPES env.
+# unauthenticated_read_content: lets the app create its own Storefront
+#   token to read the store logo (Settings → Brand) for packing slips — the
+#   Admin API doesn't expose it. No customer data.
+# read_products: compare-at price and barcode on packing slips (they live
+#   on the product variant). No customer data.
+# read_themes + read_files: fall back to the theme's header logo when
+#   Settings → Brand has none (theme settings → shop_images file → CDN URL).
+# read_locations + read_merchant_managed_fulfillment_orders +
+#   read_third_party_fulfillment_orders: the packing slip's distance line —
+#   which location each order ships from (own or a 3PL's) and its
+#   coordinates. No customer data. Until approved, the distance is measured
+#   from the store address.
+scopes = "read_orders,write_orders,unauthenticated_read_content,read_products,read_themes,read_files,read_locations,read_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders"
+
+[auth]
+redirect_urls = ["https://weather-slip.vercel.app/auth/callback"]
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"
+
+  # Plan changes made outside the Plans page (cancelled, frozen, expired).
+  [[webhooks.subscriptions]]
+  topics = ["app_subscriptions/update"]
+  uri = "/webhooks/app/subscriptions_update"
+
+  [[webhooks.subscriptions]]
+  # No orders/create: weather is fetched only when a slip is printed.
+  # orders/updated keeps printed orders' saved weather in step with
+  # address changes and freezes it on fulfillment.
+  topics = ["orders/updated"]
+  uri = "/webhooks/orders"
+
+  # Mandatory for public apps.
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks/compliance"
