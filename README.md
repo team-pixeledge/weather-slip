@@ -93,7 +93,8 @@ Variables: `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`,
 for migrations), `WEATHER_PROVIDER`, `OPENWEATHER_API_KEYS`,
 `ENCRYPTION_KEY`, `CRON_SECRET`, `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM`,
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SENTRY_DSN`
-(production only). `SENTRY_RELEASE` is set by the workflow.
+(production only), `SHOPIFY_BILLING_TEST` (`false` in production only, so
+real merchants are charged; development stores always get test charges). `SENTRY_RELEASE` is set by the workflow.
 
 ## Repository layout
 
