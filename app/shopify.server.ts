@@ -36,7 +36,29 @@ const shopify = shopifyApp({
 export default shopify;
 export const apiVersion = ApiVersion.October26;
 export const addDocumentResponseHeaders = shopify.addDocumentResponseHeaders;
-export const authenticate = shopify.authenticate;
+// shopify-api's sanitizeHost base64-decodes `host` and calls `new URL()` on it
+// without a try/catch: a value that passes its base64 regex but decodes to
+// junk (App Review's probe sends `host=9998818203999999999`) throws a TypeError
+// and the request 500s. Reject it as a 400 before the library sees it.
+function assertParsableHost(request: Request) {
+  const host = new URL(request.url).searchParams.get("host");
+  // Same regex/decode/parse steps as sanitizeHost; anything else it rejects
+  // cleanly (App Bridge bounce), so only the parse can blow up.
+  if (!host || !/^[0-9a-zA-Z+/]+={0,2}$/.test(host)) return;
+  try {
+    new URL(`https://${atob(host)}`);
+  } catch {
+    throw new Response("Invalid host parameter", { status: 400 });
+  }
+}
+
+export const authenticate = {
+  ...shopify.authenticate,
+  admin: ((request: Request) => {
+    assertParsableHost(request);
+    return shopify.authenticate.admin(request);
+  }) as typeof shopify.authenticate.admin,
+};
 export const unauthenticated = shopify.unauthenticated;
 export const login = shopify.login;
 export const registerWebhooks = shopify.registerWebhooks;
