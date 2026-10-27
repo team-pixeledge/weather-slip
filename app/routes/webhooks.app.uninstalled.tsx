@@ -15,7 +15,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Keep settings and snapshots until shop/redact (48h later) so a quick
   // reinstall doesn't lose them; stop any queued work now.
-  await db.shop.updateMany({ where: { shop }, data: { uninstalledAt: new Date() } });
+  // Shopify cancels the app's charges on uninstall. The app_subscriptions/update
+  // webhook for that can't re-read them (the session is gone), so drop the
+  // plan here — a reinstall starts on Free until a plan is approved again.
+  await db.shop.updateMany({ where: { shop }, data: { uninstalledAt: new Date(), plan: "FREE", usageAlertLevel: 0 } });
   await db.weatherJob.deleteMany({ where: { shop, status: { in: ["PENDING", "RUNNING"] } } });
 
   return new Response();

@@ -7,6 +7,8 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { ensureShop } from "./lib/shop.server";
+import { syncPlan } from "./lib/billing.server";
+import { captureError } from "./lib/sentry.server";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -26,6 +28,14 @@ const shopify = shopifyApp({
         query ShopTimezone { shop { ianaTimezone } }`);
       const json = (await res.json()) as { data?: { shop: { ianaTimezone: string } } };
       await ensureShop(session.shop, json.data?.shop.ianaTimezone);
+      // A reinstall must not keep the plan from before the uninstall —
+      // Shopify cancelled that charge. Read what the shop actually pays for
+      // now (FREE after a reinstall). Best-effort: never block the install.
+      try {
+        await syncPlan(admin, session.shop);
+      } catch (err) {
+        captureError(err, { where: "afterAuth syncPlan", shop: session.shop });
+      }
     },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
