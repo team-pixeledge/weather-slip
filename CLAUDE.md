@@ -258,8 +258,13 @@ switch confirmed inline, "Compare all features" table.
   `Shop.plan`; runs on every Plans load, before every plan change, and on
   the `app_subscriptions/update` webhook.
 - Test charges while `SHOPIFY_BILLING_TEST` isn't "false", and always on
-  development stores (`shop.plan.partnerDevelopment`). A test subscription
-  only unlocks a plan in those same conditions.
+  development stores (`shop.plan.partnerDevelopment`). **Any ACTIVE
+  subscription unlocks its plan, test or not** (`pickActiveSubscription`):
+  Shopify turns our live charge into a test one on stores it doesn't bill
+  (App Store review / staff stores — not `partnerDevelopment`). The old rule
+  "a test subscription only counts in test mode or on a dev store" left the
+  reviewer on Free after approving Business: rejection 1.2.2, 2026-11-06.
+  Known leak: a dev store transferred to a merchant keeps its test charge.
 
 ## Get started checklist (Plans page)
 

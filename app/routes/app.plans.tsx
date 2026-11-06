@@ -84,7 +84,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     current: billing.plan,
     interval: billing.interval,
     subscription: billing.subscription,
-    testCharge: billing.testCharge,
+    // Also when Shopify made the current charge a test one (review / staff stores).
+    testCharge: billing.testCharge || Boolean(billing.subscription?.test),
     used: elapsed ? 0 : shop.usageCount,
     resetsAt: new Date(resetsAt).toISOString(),
     failedJobs,
