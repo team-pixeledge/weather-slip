@@ -56,10 +56,21 @@ export interface BillingState {
 }
 
 /**
+ * The paid plan a shop is on: its ACTIVE subscription with one of our plan
+ * names, test or not. Shopify decides whether a charge is a test — it turns
+ * our real charge into a test one on stores it doesn't bill (the App Store
+ * review stores, staff stores), so ignoring test charges outside test mode
+ * left a reviewer who had approved Business stuck on Free (rejection
+ * 1.2.2, 2026-11-06). In production we never request a test charge on a
+ * billable store, so an active test subscription is always Shopify's call.
+ */
+export function pickActiveSubscription<S extends { status: string; name: string }>(subs: S[]): S | null {
+  return subs.find((s) => s.status === "ACTIVE" && planFromBillingName(s.name)) ?? null;
+}
+
+/**
  * Shopify is the source of truth for what a shop pays for: read its active
  * subscription and write the matching plan to Shop.plan (FREE if none).
- * A test subscription only counts in test mode or on a development store,
- * so a leftover test charge can't unlock a paid plan on a live store.
  */
 export async function syncPlan(admin: GraphqlClient, shop: string): Promise<BillingState> {
   const data = await gql<{
@@ -68,10 +79,7 @@ export async function syncPlan(admin: GraphqlClient, shop: string): Promise<Bill
   }>(admin, BILLING_STATE);
   const devStore = data.shop.plan.partnerDevelopment;
   const testCharge = billingIsTest() || devStore;
-  const subscription =
-    data.currentAppInstallation.activeSubscriptions.find(
-      (s) => s.status === "ACTIVE" && (testCharge || !s.test) && planFromBillingName(s.name),
-    ) ?? null;
+  const subscription = pickActiveSubscription(data.currentAppInstallation.activeSubscriptions);
   const plan: PlanId = subscription ? planFromBillingName(subscription.name)! : "FREE";
   // A plan change restarts the usage alerts (80% of the new limit is a new threshold).
   await prisma.shop.updateMany({
