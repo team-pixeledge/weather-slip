@@ -1,9 +1,9 @@
 import type { JobReason, WeatherJob } from "@prisma/client";
 import prisma from "../db.server";
 import { notifyAdmin } from "./alerts.server";
+import { failurePlan } from "./job-failure";
 import { errorMessage } from "./sentry.server";
 
-const MAX_ATTEMPTS = 5;
 const STALE_LOCK_MS = 10 * 60 * 1000;
 
 /**
@@ -51,25 +51,21 @@ export async function completeJob(id: string): Promise<void> {
   });
 }
 
-/** Exponential backoff (2, 4, 8, 16 min), then give up. */
+/** Retry with backoff or give up — see failurePlan for the rules. */
 export async function failJob(job: WeatherJob, error: unknown, now = new Date()): Promise<void> {
   const message = errorMessage(error);
-  const done = job.attempts >= MAX_ATTEMPTS;
+  const plan = failurePlan(job, error, message, now);
   await prisma.weatherJob.update({
     where: { id: job.id },
     data: {
-      status: done ? "FAILED" : "PENDING",
+      status: plan.status,
       lockedAt: null,
       lastError: message.slice(0, 1000),
-      runAfter: new Date(now.getTime() + 2 ** job.attempts * 60_000),
+      runAfter: plan.runAfter,
     },
   });
-  if (done) {
-    await notifyAdmin(
-      "job-failed",
-      "An order's weather couldn't be saved",
-      `Job ${job.id} (${job.reason}) for order ${job.orderId} on ${job.shop} failed ${job.attempts} times and gave up.\n\nLast error: ${message}`,
-    );
+  if (plan.alert) {
+    await notifyAdmin(plan.alert.key, plan.alert.subject, plan.alert.text, { throttleMs: plan.alert.throttleMs });
   }
 }
 
