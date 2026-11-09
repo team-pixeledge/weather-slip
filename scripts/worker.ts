@@ -4,7 +4,7 @@
 // /api/cron/drain instead — don't run this there.
 import { log } from "../app/lib/logger.server";
 import { drainQueue, runMaintenance } from "../app/lib/queue-runner.server";
-import { captureError, flushSentry, initSentry } from "../app/lib/sentry.server";
+import { captureError, errorMessage, flushSentry, initSentry } from "../app/lib/sentry.server";
 
 initSentry("worker");
 
@@ -24,7 +24,7 @@ async function main() {
         log.info(await runMaintenance(), "worker maintenance");
       } catch (err) {
         // A DB blip shouldn't kill the worker; report it and retry next round.
-        log.error({ err: err instanceof Error ? err.message : String(err) }, "worker maintenance failed");
+        log.error({ err: errorMessage(err) }, "worker maintenance failed");
         captureError(err, { where: "maintenance" });
       }
       lastMaintenance = Date.now();
@@ -38,7 +38,7 @@ async function main() {
 }
 
 main().catch(async (err) => {
-  log.fatal({ err: err instanceof Error ? err.message : String(err) }, "worker crashed");
+  log.fatal({ err: errorMessage(err) }, "worker crashed");
   captureError(err, { where: "worker" });
   await flushSentry();
   process.exit(1);

@@ -1,6 +1,7 @@
 import type { JobReason, WeatherJob } from "@prisma/client";
 import prisma from "../db.server";
 import { notifyAdmin } from "./alerts.server";
+import { errorMessage } from "./sentry.server";
 
 const MAX_ATTEMPTS = 5;
 const STALE_LOCK_MS = 10 * 60 * 1000;
@@ -52,7 +53,7 @@ export async function completeJob(id: string): Promise<void> {
 
 /** Exponential backoff (2, 4, 8, 16 min), then give up. */
 export async function failJob(job: WeatherJob, error: unknown, now = new Date()): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   const done = job.attempts >= MAX_ATTEMPTS;
   await prisma.weatherJob.update({
     where: { id: job.id },

@@ -46,10 +46,38 @@ export function initSentry(component: "web" | "worker"): void {
   });
 }
 
+/**
+ * Shopify's app library throws bare `Response` objects, not Errors — e.g.
+ * `Response(500)` when refreshing an expiring offline token fails (it drops
+ * the underlying error). Those stringify as "[object Response]" and reach
+ * Sentry with no stack or status. Turn them into an Error naming the status;
+ * the body is not read (it can quote Shopify payloads).
+ */
+export function toError(err: unknown): Error {
+  if (err instanceof Error) return err;
+  if (err instanceof Response) {
+    const e = new Error(
+      `Shopify library threw a Response: HTTP ${err.status}${err.statusText ? ` ${err.statusText}` : ""}` +
+        (err.status === 500 && !err.body
+          ? " (likely an offline access-token refresh failure)"
+          : ""),
+    );
+    e.name = "ShopifyResponseError";
+    return e;
+  }
+  return new Error(String(err));
+}
+
+/** Human-readable message for logs and stored job errors. */
+export function errorMessage(err: unknown): string {
+  return toError(err).message;
+}
+
 /** Report an error with optional non-personal context (ids, paths, reasons). */
 export function captureError(err: unknown, context?: Record<string, string | number | undefined>): void {
   if (!started) return;
-  Sentry.captureException(err, context ? { extra: context } : undefined);
+  const extra = { ...context, ...(err instanceof Response ? { httpStatus: err.status } : {}) };
+  Sentry.captureException(toError(err), Object.keys(extra).length ? { extra } : undefined);
 }
 
 /** Wait for queued events to be sent, e.g. before the worker exits. */
