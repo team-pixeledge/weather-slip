@@ -6,7 +6,7 @@ import { claimJobs, completeJob, enqueueDueFills, failJob, pruneFinishedJobs } f
 import { processJob } from "./order-weather.server";
 import { pruneExpiredCache } from "./weather/cache.server";
 import { log } from "./logger.server";
-import { captureError } from "./sentry.server";
+import { captureError, errorMessage } from "./sentry.server";
 
 export interface DrainResult {
   processed: number;
@@ -35,8 +35,8 @@ export async function drainQueue({
       } catch (err) {
         await failJob(job, err);
         result.failed++;
-        log.error({ jobId: job.id, reason: job.reason, err: err instanceof Error ? err.message : String(err) }, "queue job failed");
-        captureError(err, { jobId: job.id, reason: job.reason });
+        log.error({ jobId: job.id, reason: job.reason, shop: job.shop, err: errorMessage(err) }, "queue job failed");
+        captureError(err, { jobId: job.id, reason: job.reason, shop: job.shop, attempt: job.attempts });
       }
     }
   }
