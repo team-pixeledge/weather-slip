@@ -20,6 +20,7 @@ import {
 import { cachedForecast, cachedGeocode } from "./weather/cache.server";
 import type { GeoPoint, WeatherSnapshot } from "./weather/types";
 import { query } from "./orders.server";
+import { offlineSessionProblem, ShopReauthRequiredError } from "./job-failure";
 
 type AdminClient = Awaited<ReturnType<typeof unauthenticated.admin>>["admin"];
 
@@ -168,6 +169,14 @@ export async function processJob(job: WeatherJob, now = new Date()): Promise<voi
   if (job.reason === "CREATE" && prev) return;
   if (job.reason === "PENDING_FILL" && prev?.status !== "PENDING_DATES") return;
   if (job.reason === "ADDRESS_CHANGE" && prev?.frozenAt) return;
+
+  // A missing session or an expired refresh token can't recover by retrying.
+  const session = await prisma.session.findFirst({
+    where: { shop: job.shop, isOnline: false },
+    select: { refreshToken: true, refreshTokenExpires: true },
+  });
+  const problem = offlineSessionProblem(session, now);
+  if (problem) throw new ShopReauthRequiredError(job.shop, problem);
 
   const { admin } = await unauthenticated.admin(job.shop);
   const data = await fetchOrder(admin, job.orderId);
