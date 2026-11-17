@@ -51,7 +51,7 @@ database or keys.
 | Hosting | AWS Lightsail container service `weather-slip` (us-east-1) | Vercel project `weather-slip` (Hobby) |
 | Database | Neon project `weather-slip-prod` (ThePixelEdge org, AWS us-east-1) | Neon DB `weather-slip-db` (Vercel integration) |
 | Deploys | Push to `prod` → GitHub Actions → Lightsail | Push to `main` → Vercel |
-| Background queue | `worker` container, always on | Daily Vercel cron (`/api/cron/drain`) and inline draining |
+| Background queue | `worker` container (sleeps until the next retry is due, at most 30 min, so Neon can suspend) | Daily Vercel cron (`/api/cron/drain`) and inline draining |
 | Errors | Sentry project `weather-slip` | Not sent to Sentry |
 
 To install on a development store: `https://admin.shopify.com/store/<store>/oauth/install?client_id=<client_id from the toml>`.

@@ -86,6 +86,38 @@ export async function enqueueDueFills(now = new Date()): Promise<number> {
   return due.length;
 }
 
+/**
+ * The earliest moment the queue has work: a pending job's runAfter, a
+ * pending-date fill's nextFillAt, or a RUNNING job's lock going stale.
+ * Null when nothing is scheduled. Used by the worker to sleep until then.
+ */
+export async function nextDueAt(): Promise<Date | null> {
+  const [job, fill, running] = await Promise.all([
+    prisma.weatherJob.findFirst({
+      where: { status: "PENDING" },
+      orderBy: { runAfter: "asc" },
+      select: { runAfter: true },
+    }),
+    prisma.orderWeatherSnapshot.findFirst({
+      where: { status: "PENDING_DATES", nextFillAt: { not: null } },
+      orderBy: { nextFillAt: "asc" },
+      select: { nextFillAt: true },
+    }),
+    prisma.weatherJob.findFirst({
+      where: { status: "RUNNING", lockedAt: { not: null } },
+      orderBy: { lockedAt: "asc" },
+      select: { lockedAt: true },
+    }),
+  ]);
+  const times = [
+    job?.runAfter,
+    fill?.nextFillAt,
+    running?.lockedAt ? new Date(running.lockedAt.getTime() + STALE_LOCK_MS) : null,
+  ].filter((t): t is Date => t instanceof Date);
+  if (times.length === 0) return null;
+  return new Date(Math.min(...times.map((t) => t.getTime())));
+}
+
 export async function pruneFinishedJobs(now = new Date()): Promise<number> {
   const { count } = await prisma.weatherJob.deleteMany({
     where: {
