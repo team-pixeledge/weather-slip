@@ -460,6 +460,14 @@ cutover is done (`vercel.json` disables Vercel builds of `prod`).
   `/healthz`, no DB query on purpose) and `worker` (`npm run worker`, so
   `tsx` is a runtime dependency). Off Vercel `runInBackground` just lets
   the promise run; the worker picks up anything it doesn't finish.
+- **The worker must not poll the DB** (fixed 2026-11-17). It used to check
+  the queue every 5 s, which kept Neon awake 24/7 and used up the free
+  plan's 100 CU-hours by 17 Nov (prod DB suspended). Now it sleeps until the
+  next due retry / pending-date fill / stale lock (`nextDueAt`), at most 30
+  min (`app/lib/worker-schedule.ts`), disconnects Prisma while asleep, runs
+  fills every wake and pruning every 6 h. Neon suspends after ~5 min idle, so
+  any new periodic DB query must leave gaps longer than that. A retry
+  scheduled by the web container's inline drain waits up to 30 min.
 - Lightsail is x86: build with `--platform linux/amd64` on Apple silicon.
 - Runtime env = SSM SecureStrings under `/weather-slip/prod/`
   (`scripts/aws/setup.sh env <file>`); the workflow reads them at deploy

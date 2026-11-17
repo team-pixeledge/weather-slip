@@ -43,9 +43,14 @@ export async function drainQueue({
   return result;
 }
 
-/** Periodic housekeeping: schedule pending-date fills, prune old rows. */
-export async function runMaintenance() {
+/**
+ * Periodic housekeeping: schedule pending-date fills, and (unless
+ * `prune: false`) prune old job and cache rows. The worker runs fills on
+ * every wake but prunes only every few hours.
+ */
+export async function runMaintenance({ prune = true }: { prune?: boolean } = {}) {
   const fills = await enqueueDueFills();
+  if (!prune) return { fills, jobsPruned: 0, cachePruned: 0 };
   const jobsPruned = await pruneFinishedJobs();
   const cachePruned = await pruneExpiredCache();
   return { fills, jobsPruned, cachePruned };
